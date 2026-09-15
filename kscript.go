@@ -89,9 +89,30 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 		return nil, fmt.Errorf("%w: empty task %s", ErrInvalidDefinition, t.Name)
 	}
 	result := &Result{Status: StatusSucceeded, Task: t.Name}
+	if err := r.runTask(ctx, t, req, result, map[string]bool{}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Result, stack map[string]bool) error {
+	if stack[t.Name] {
+		return fmt.Errorf("%w: %s", ErrDependencyCycle, t.Name)
+	}
+	stack[t.Name] = true
+	defer delete(stack, t.Name)
+	if ok, err := evalCondition(t.If, req.Vars); err != nil {
+		return err
+	} else if !ok {
+		return nil
+	}
 	for _, dep := range t.Deps {
-		if _, err := r.Run(ctx, Request{Task: dep, Args: req.Args, Vars: req.Vars, Env: req.Env, Dir: req.Dir}); err != nil {
-			return nil, err
+		dt, err := r.Lookup(dep)
+		if err != nil {
+			return err
+		}
+		if err := r.runTask(ctx, dt, req, result, stack); err != nil {
+			return err
 		}
 	}
 	for _, step := range t.Steps {
@@ -104,7 +125,22 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 				return &Result{Status: StatusSkipped, Task: t.Name}, nil
 			}
 		}
-		if step.Exec != nil {
+		if step.Task != nil {
+			ct, err := r.Lookup(step.Task.Name)
+			if err != nil {
+				return err
+			}
+			if err := r.runTask(ctx, ct, req, result, stack); err != nil {
+				return err
+			}
+		} else if step.Host != nil {
+			h := r.cfg.handlers[step.Host.Name]
+			ar, err := h(ctx, HostCall{Name: step.Host.Name, Args: step.Host.Args, Vars: req.Vars, Env: req.Env, Dir: req.Dir})
+			if err != nil {
+				return err
+			}
+			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
+		} else if step.Exec != nil {
 			ar, err := r.cfg.engine.Execute(ctx, PreparedAction{Kind: "exec", Program: step.Exec.Program, Args: step.Exec.Args, Dir: req.Dir, Env: req.Env}, req.IO)
 			if err != nil {
 				return nil, err
@@ -112,7 +148,7 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
 		}
 	}
-	return result, nil
+	return nil
 }
 
 func evalCondition(source string, vars map[string]any) (bool, error) {
