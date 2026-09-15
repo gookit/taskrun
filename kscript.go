@@ -88,6 +88,7 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 	if len(t.Steps) == 0 && len(t.Deps) == 0 {
 		return nil, fmt.Errorf("%w: empty task %s", ErrInvalidDefinition, t.Name)
 	}
+	result := &Result{Status: StatusSucceeded, Task: t.Name}
 	for _, dep := range t.Deps {
 		if _, err := r.Run(ctx, Request{Task: dep, Args: req.Args, Vars: req.Vars, Env: req.Env, Dir: req.Dir}); err != nil {
 			return nil, err
@@ -111,7 +112,7 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
 		}
 	}
-	return &Result{Status: StatusSucceeded, Task: t.Name}, nil
+	return result, nil
 }
 
 func evalCondition(source string, vars map[string]any) (bool, error) {
