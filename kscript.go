@@ -64,10 +64,60 @@ func (r *Runner) Inspect(ctx context.Context, req Request) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	if t.If != "" {
-		return Plan{Task: req.Task, Deferred: []string{"task condition: " + t.If}}, nil
+	p := Plan{Task: req.Task}
+	var walk func(Task) error
+	walk = func(task Task) error {
+		if task.If != "" {
+			p.Deferred = append(p.Deferred, "task condition: "+task.Name+": "+task.If)
+		}
+		for _, dep := range task.Deps {
+			dt, err := r.Lookup(dep)
+			if err != nil {
+				return err
+			}
+			if err := walk(dt); err != nil {
+				return err
+			}
+		}
+		for _, step := range task.Steps {
+			if step.If != "" {
+				p.Deferred = append(p.Deferred, "step condition: "+step.Name+": "+step.If)
+			}
+			kind := ""
+			program := ""
+			args := []string{}
+			if step.Exec != nil {
+				kind = "exec"
+				program = step.Exec.Program
+				args = step.Exec.Args
+			}
+			if step.Shell != nil {
+				kind = "shell"
+				program = step.Shell.Name
+			}
+			if step.File != nil {
+				kind = "file"
+				program = step.File.Interpreter.Program
+				args = append(step.File.Interpreter.PrefixArgs, step.File.Path)
+			}
+			if step.Task != nil {
+				ct, err := r.Lookup(step.Task.Name)
+				if err != nil {
+					return err
+				}
+				if err := walk(ct); err != nil {
+					return err
+				}
+				continue
+			}
+			p.Actions = append(p.Actions, PlannedAction{Task: task.Name, Step: step.Name, Kind: kind, Program: program, Args: args, Dir: req.Dir})
+		}
+		return nil
 	}
-	return Plan{Task: req.Task}, nil
+	if err := walk(t); err != nil {
+		return Plan{}, err
+	}
+	return p, nil
 }
 func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 	if err := ctx.Err(); err != nil {
@@ -150,7 +200,8 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 				return err
 			}
 			if !ok {
-				return nil
+				result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSkipped})
+				continue
 			}
 		}
 		if step.Task != nil {
