@@ -86,3 +86,4 @@ func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
 	}
 	return d, nil
 }
+
