@@ -39,3 +39,14 @@ func TestLoadRejectsInvalidDependencies(t *testing.T) {
 		t.Fatal("expected deps type error")
 	}
 }
+
+func TestLoadYAMLAndTOML(t *testing.T) {
+	yamlDef, err := Load(".yaml", strings.NewReader("version: 1\ntasks:\n  check:\n    run: echo\n"), "test.yaml", ".")
+	if err != nil || yamlDef.Tasks["check"].Name != "check" {
+		t.Fatalf("yaml=%+v err=%v", yamlDef, err)
+	}
+	tomlDef, err := Load(".toml", strings.NewReader("version = 1\n[tasks.check]\nrun = \"echo\"\n"), "test.toml", ".")
+	if err != nil || tomlDef.Tasks["check"].Name != "check" {
+		t.Fatalf("toml=%+v err=%v", tomlDef, err)
+	}
+}
