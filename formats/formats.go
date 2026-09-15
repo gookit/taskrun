@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/BurntSushi/toml"
+	"github.com/goccy/go-yaml"
 	"github.com/gookit/kscript"
 )
 
@@ -21,11 +23,23 @@ func LoadFile(path string) (kscript.Definition, error) {
 }
 
 func Load(ext string, r io.Reader, source, baseDir string) (kscript.Definition, error) {
-	if !strings.EqualFold(ext, ".json") {
-		return kscript.Definition{}, fmt.Errorf("format %q not implemented", ext)
-	}
 	var raw map[string]any
-	if err := json.NewDecoder(r).Decode(&raw); err != nil {
+	var err error
+	switch strings.ToLower(ext) {
+	case ".json":
+		err = json.NewDecoder(r).Decode(&raw)
+	case ".yaml", ".yml":
+		b, e := io.ReadAll(r)
+		err = yaml.Unmarshal(b, &raw)
+		_ = e
+	case ".toml":
+		b, e := io.ReadAll(r)
+		err = toml.Unmarshal(b, &raw)
+		_ = e
+	default:
+		return kscript.Definition{}, fmt.Errorf("unsupported format %q", ext)
+	}
+	if err != nil {
 		return kscript.Definition{}, fmt.Errorf("load %s: %w", source, err)
 	}
 	return decode(raw, baseDir)
