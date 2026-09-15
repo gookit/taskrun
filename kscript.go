@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/expr-lang/expr"
 )
@@ -96,6 +97,11 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 }
 
 func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Result, stack map[string]bool) error {
+	if t.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(t.Timeout))
+		defer cancel()
+	}
 	if stack[t.Name] {
 		return fmt.Errorf("%w: %s", ErrDependencyCycle, t.Name)
 	}
@@ -116,6 +122,12 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 		}
 	}
 	for _, step := range t.Steps {
+		stepCtx := ctx
+		if step.Timeout > 0 {
+			var cancel context.CancelFunc
+			stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout))
+			defer cancel()
+		}
 		if step.If != "" {
 			ok, err := evalCondition(step.If, req.Vars)
 			if err != nil {
@@ -135,13 +147,32 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 			}
 		} else if step.Host != nil {
 			h := r.cfg.handlers[step.Host.Name]
-			ar, err := h(ctx, HostCall{Name: step.Host.Name, Args: step.Host.Args, Vars: req.Vars, Env: req.Env, Dir: req.Dir})
+			ar, err := h(stepCtx, HostCall{Name: step.Host.Name, Args: step.Host.Args, Vars: req.Vars, Env: req.Env, Dir: req.Dir})
 			if err != nil {
 				return err
 			}
 			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
-		} else if step.Exec != nil {
-			ar, err := r.cfg.engine.Execute(ctx, PreparedAction{Kind: "exec", Program: step.Exec.Program, Args: step.Exec.Args, Dir: req.Dir, Env: req.Env}, req.IO)
+		} else {
+			action := PreparedAction{Dir: req.Dir, Env: req.Env}
+			if step.Exec != nil {
+				action.Kind = "exec"
+				action.Program = step.Exec.Program
+				action.Args = step.Exec.Args
+			}
+			if step.Shell != nil {
+				action.Kind = "shell"
+				action.Program = step.Shell.Name
+				action.Script = step.Shell.Script
+			}
+			if step.File != nil {
+				action.Kind = "file"
+				action.Program = step.File.Interpreter.Program
+				action.Args = append(append([]string{}, step.File.Interpreter.PrefixArgs...), step.File.Path)
+			}
+			if action.Program == "" {
+				return fmt.Errorf("%w: step %s has no action", ErrInvalidDefinition, step.Name)
+			}
+			ar, err := r.cfg.engine.Execute(stepCtx, action, req.IO)
 			if err != nil {
 				return err
 			}
