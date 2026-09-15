@@ -1,6 +1,10 @@
 package kscript
 
-import "context"
+import (
+	"context"
+	"io"
+	"time"
+)
 
 // Definition is an immutable task and script definition source.
 type Definition struct {
@@ -105,15 +109,13 @@ type Request struct {
 
 // IO controls process streams and bounded capture.
 type IO struct {
-	Stdin        Reader
-	Stdout       Writer
-	Stderr       Writer
+	Stdin        io.Reader
+	Stdout       io.Writer
+	Stderr       io.Writer
 	CaptureLimit int64
 }
 
 // Reader and Writer avoid forcing a CLI or logging dependency into the model.
-type Reader interface{ Read([]byte) (int, error) }
-type Writer interface{ Write([]byte) (int, error) }
 
 // Status is the final status of a run or action.
 type Status string

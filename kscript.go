@@ -33,6 +33,9 @@ func New(def Definition, opts ...Option) (*Runner, error) {
 			return nil, err
 		}
 	}
+	if c.engine == nil {
+		c.engine = ProcessEngine{}
+	}
 	if err := validateDefinition(def, c); err != nil {
 		return nil, err
 	}
@@ -84,6 +87,23 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 	}
 	if len(t.Steps) == 0 && len(t.Deps) == 0 {
 		return nil, fmt.Errorf("%w: empty task %s", ErrInvalidDefinition, t.Name)
+	}
+	for _, step := range t.Steps {
+		if step.If != "" {
+			ok, err := evalCondition(step.If, req.Vars)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return &Result{Status: StatusSkipped, Task: t.Name}, nil
+			}
+		}
+		if step.Exec != nil {
+			_, err := r.cfg.engine.Execute(ctx, PreparedAction{Kind: "exec", Program: step.Exec.Program, Args: step.Exec.Args, Dir: req.Dir, Env: req.Env}, req.IO)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	return &Result{Status: StatusSucceeded, Task: t.Name}, nil
 }
