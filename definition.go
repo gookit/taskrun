@@ -3,7 +3,6 @@ package kscript
 import (
 	"context"
 	"io"
-	"time"
 )
 
 // Definition is an immutable task and script definition source.
@@ -26,7 +25,7 @@ type Task struct {
 	Dir      string
 	If       string
 	Platform []string
-	Timeout  timeDuration
+	Timeout  int64
 }
 
 // Step is exactly one executable action.
@@ -42,7 +41,7 @@ type Step struct {
 	Dir         string
 	If          string
 	IgnoreError bool
-	Timeout     timeDuration
+	Timeout     int64
 }
 
 // ExecSpec describes argv execution without shell parsing.
@@ -90,10 +89,6 @@ type ScriptFile struct {
 	Env         map[string]string
 	Dir         string
 }
-
-// timeDuration keeps the public model independent of a config duration parser.
-// It accepts time.Duration values through the Option/Go API conversion helpers.
-type timeDuration int64
 
 // Request describes one isolated run.
 type Request struct {
