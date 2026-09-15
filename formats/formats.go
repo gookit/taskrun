@@ -71,14 +71,11 @@ func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
 			for key := range value { if key != "name" && key != "desc" && key != "if" && key != "run" && key != "deps" { return d, fmt.Errorf("task %s: unknown field %q", name, key) } }
 			if desc, ok := value["desc"].(string); ok {
 				task.Desc = desc
-			}
 			if condition, ok := value["if"].(string); ok {
 				task.If = condition
-			}
 			if run, ok := value["run"].(string); ok {
 				task.Steps = []kscript.Step{{Exec: &kscript.ExecSpec{Program: run}}}
 			} else if _, present := value["run"]; present { return d, fmt.Errorf("task %s: run must be string", name) }
-			}
 		default:
 			return d, fmt.Errorf("task %s must be string or object", name)
 		}
