@@ -119,7 +119,7 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 		if step.If != "" {
 			ok, err := evalCondition(step.If, req.Vars)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if !ok {
 				return &Result{Status: StatusSkipped, Task: t.Name}, nil
@@ -143,7 +143,7 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 		} else if step.Exec != nil {
 			ar, err := r.cfg.engine.Execute(ctx, PreparedAction{Kind: "exec", Program: step.Exec.Program, Args: step.Exec.Args, Dir: req.Dir, Env: req.Env}, req.IO)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
 		}
