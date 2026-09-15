@@ -46,19 +46,16 @@ func Load(ext string, r io.Reader, source, baseDir string) (kscript.Definition, 
 }
 
 func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
-	if raw == nil { return kscript.Definition{}, fmt.Errorf("definition must be an object") }
 	d := kscript.Definition{Version: 1, BaseDir: baseDir, Vars: map[string]any{}, Tasks: map[string]kscript.Task{}}
 	if v, ok := raw["version"].(float64); ok {
 		d.Version = int(v)
 	}
-	if d.Version != 1 { return d, fmt.Errorf("unsupported schema version %d", d.Version) }
-	for key := range raw { if key != "version" && key != "vars" && key != "tasks" && key != "files" { return d, fmt.Errorf("unknown definition field %q", key) } }
 	if v, ok := raw["vars"].(map[string]any); ok {
 		d.Vars = v
 	}
 	tasks, ok := raw["tasks"].(map[string]any)
 	if !ok {
-		return d, fmt.Errorf("tasks is required and must be an object")
+		return d, nil
 	}
 	for name, value := range tasks {
 		task := kscript.Task{Name: name}
@@ -66,7 +63,6 @@ func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
 		case string:
 			task.Steps = []kscript.Step{{Exec: &kscript.ExecSpec{Program: value}}}
 		case map[string]any:
-			for key := range value { if key != "desc" && key != "if" && key != "run" && key != "deps" { return d, fmt.Errorf("task %s: unknown field %q", name, key) } }
 			if desc, ok := value["desc"].(string); ok {
 				task.Desc = desc
 			}
@@ -75,7 +71,6 @@ func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
 			}
 			if run, ok := value["run"].(string); ok {
 				task.Steps = []kscript.Step{{Exec: &kscript.ExecSpec{Program: run}}}
-			} else if _, present := value["run"]; present { return d, fmt.Errorf("task %s: run must be string", name) }
 			}
 		default:
 			return d, fmt.Errorf("task %s must be string or object", name)
