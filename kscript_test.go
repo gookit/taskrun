@@ -93,3 +93,16 @@ func TestIgnoreError(t *testing.T) {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
 }
+
+func TestCanceledRunReturnsResult(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"x": {Name: "x", Steps: []Step{{Exec: &ExecSpec{Program: "echo"}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.Run(ctx, Request{Task: "x"})
+	if err == nil || res == nil || res.Status != StatusCanceled {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+}
