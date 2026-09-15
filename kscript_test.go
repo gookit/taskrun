@@ -27,3 +27,16 @@ func TestConditionMustBeBool(t *testing.T) {
 		t.Fatal("expected bool error")
 	}
 }
+
+func TestDependencyCycle(t *testing.T) {
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{
+		"a": {Name: "a", Deps: []string{"b"}, Steps: []Step{{Exec: &ExecSpec{Program: "echo"}}}},
+		"b": {Name: "b", Deps: []string{"a"}, Steps: []Step{{Exec: &ExecSpec{Program: "echo"}}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.Run(context.Background(), Request{Task: "a"}); err == nil {
+		t.Fatal("expected dependency cycle")
+	}
+}
