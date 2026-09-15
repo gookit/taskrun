@@ -71,3 +71,14 @@ func TestDependencyCycle(t *testing.T) {
 		t.Fatal("expected dependency cycle")
 	}
 }
+
+func TestInspectExpandsActions(t *testing.T) {
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"a": {Name: "a", Deps: []string{"b"}, Steps: []Step{{Exec: &ExecSpec{Program: "echo", Args: []string{"ok"}}}}}, "b": {Name: "b", Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "true"}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := r.Inspect(context.Background(), Request{Task: "a"})
+	if err != nil || len(p.Actions) != 2 {
+		t.Fatalf("plan=%+v err=%v", p, err)
+	}
+}
