@@ -149,7 +149,7 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			result.Status = StatusTimedOut
 		}
-		return nil, err
+		return result, err
 	}
 	return result, nil
 }
