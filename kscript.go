@@ -40,7 +40,7 @@ func New(def Definition, opts ...Option) (*Runner, error) {
 		c.engine = ProcessEngine{}
 	}
 	if err := validateDefinition(def, c); err != nil {
-        return nil, err
+		return nil, err
 	}
 	return &Runner{def: cloneDefinition(def), cfg: c}, nil
 }
@@ -145,7 +145,7 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 	if err := r.runTask(ctx, t, req, result, map[string]bool{}); err != nil {
 		if errors.Is(err, context.Canceled) {
 			result.Status = StatusCanceled
-        return result, err
+		}
 		if errors.Is(err, context.DeadlineExceeded) {
 			result.Status = StatusTimedOut
 		}
