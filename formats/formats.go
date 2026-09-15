@@ -88,6 +88,19 @@ func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
 			if condition, ok := value["if"].(string); ok {
 				task.If = condition
 			}
+			if deps, present := value["deps"]; present {
+				items, ok := deps.([]any)
+				if !ok {
+					return d, fmt.Errorf("task %s: deps must be an array", name)
+				}
+				for _, item := range items {
+					dep, ok := item.(string)
+					if !ok || dep == "" {
+						return d, fmt.Errorf("task %s: dependency must be a non-empty string", name)
+					}
+					task.Deps = append(task.Deps, dep)
+				}
+			}
 			if run, ok := value["run"].(string); ok {
 				task.Steps = []kscript.Step{{Exec: &kscript.ExecSpec{Program: run}}}
 			} else if _, present := value["run"]; present {

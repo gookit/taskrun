@@ -25,3 +25,17 @@ func TestLoadCondition(t *testing.T) {
 		t.Fatalf("definition=%+v err=%v", d, err)
 	}
 }
+
+func TestLoadDependencies(t *testing.T) {
+	d, err := Load(".json", strings.NewReader(`{"version":1,"tasks":{"build":{"deps":["test"],"run":"echo"},"test":"echo"}}`), "test.json", ".")
+	if err != nil || len(d.Tasks["build"].Deps) != 1 || d.Tasks["build"].Deps[0] != "test" {
+		t.Fatalf("definition=%+v err=%v", d, err)
+	}
+}
+
+func TestLoadRejectsInvalidDependencies(t *testing.T) {
+	_, err := Load(".json", strings.NewReader(`{"version":1,"tasks":{"build":{"deps":"test"}}}`), "test.json", ".")
+	if err == nil {
+		t.Fatal("expected deps type error")
+	}
+}
