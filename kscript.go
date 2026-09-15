@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/expr-lang/expr"
 )
 
 var ErrNotFound = errors.New("task not found")
@@ -54,8 +56,12 @@ func (r *Runner) Inspect(ctx context.Context, req Request) (Plan, error) {
 	if err := ctx.Err(); err != nil {
 		return Plan{}, err
 	}
-	if _, err := r.Lookup(req.Task); err != nil {
+	t, err := r.Lookup(req.Task)
+	if err != nil {
 		return Plan{}, err
+	}
+	if t.If != "" {
+		return Plan{Task: req.Task, Deferred: []string{"task condition: " + t.If}}, nil
 	}
 	return Plan{Task: req.Task}, nil
 }
@@ -71,10 +77,34 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 		p := Plan{Task: t.Name}
 		return &Result{Status: StatusDryRun, Task: t.Name, Plan: &p}, nil
 	}
+	if ok, err := evalCondition(t.If, req.Vars); err != nil {
+		return nil, err
+	} else if !ok {
+		return &Result{Status: StatusSkipped, Task: t.Name}, nil
+	}
 	if len(t.Steps) == 0 && len(t.Deps) == 0 {
 		return nil, fmt.Errorf("%w: empty task %s", ErrInvalidDefinition, t.Name)
 	}
 	return &Result{Status: StatusSucceeded, Task: t.Name}, nil
+}
+
+func evalCondition(source string, vars map[string]any) (bool, error) {
+	if source == "" {
+		return true, nil
+	}
+	program, err := expr.Compile(source, expr.Env(vars))
+	if err != nil {
+		return false, fmt.Errorf("invalid condition: %w", err)
+	}
+	value, err := expr.Run(program, vars)
+	if err != nil {
+		return false, fmt.Errorf("condition evaluation failed: %w", err)
+	}
+	ok, isBool := value.(bool)
+	if !isBool {
+		return false, fmt.Errorf("condition must return bool, got %T", value)
+	}
+	return ok, nil
 }
 func validateDefinition(d Definition, c runnerConfig) error {
 	for n, t := range d.Tasks {
