@@ -1,7 +1,9 @@
 package kscript
 
 import (
+	"bytes"
 	"context"
+	"runtime"
 	"testing"
 )
 
@@ -18,6 +20,35 @@ func TestConditionSkipAndRun(t *testing.T) {
 	}
 	if result.Status != StatusSkipped {
 		t.Fatalf("status=%s", result.Status)
+	}
+}
+
+func TestShellAction(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture differs on Windows")
+	}
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"s": {Name: "s", Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "printf hi"}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	res, err := r.Run(context.Background(), Request{Task: "s", IO: IO{Stdout: &out}})
+	if err != nil || res.Status != StatusSucceeded || out.String() != "hi" {
+		t.Fatalf("result=%v err=%v out=%q", res, err, out.String())
+	}
+}
+
+func TestCaptureLimit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture differs on Windows")
+	}
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"s": {Name: "s", Steps: []Step{{Exec: &ExecSpec{Program: "printf", Args: []string{"abcdef"}}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.Run(context.Background(), Request{Task: "s", IO: IO{CaptureLimit: 3}})
+	if err != nil || len(res.Steps) != 1 || string(res.Steps[0].Output) != "abc" || !res.Steps[0].Truncated {
+		t.Fatalf("result=%+v err=%v", res, err)
 	}
 }
 
