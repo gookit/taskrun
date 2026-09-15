@@ -88,6 +88,11 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 	if len(t.Steps) == 0 && len(t.Deps) == 0 {
 		return nil, fmt.Errorf("%w: empty task %s", ErrInvalidDefinition, t.Name)
 	}
+	for _, dep := range t.Deps {
+		if _, err := r.Run(ctx, Request{Task: dep, Args: req.Args, Vars: req.Vars, Env: req.Env, Dir: req.Dir}); err != nil {
+			return nil, err
+		}
+	}
 	for _, step := range t.Steps {
 		if step.If != "" {
 			ok, err := evalCondition(step.If, req.Vars)
@@ -99,10 +104,11 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 			}
 		}
 		if step.Exec != nil {
-			_, err := r.cfg.engine.Execute(ctx, PreparedAction{Kind: "exec", Program: step.Exec.Program, Args: step.Exec.Args, Dir: req.Dir, Env: req.Env}, req.IO)
+			ar, err := r.cfg.engine.Execute(ctx, PreparedAction{Kind: "exec", Program: step.Exec.Program, Args: step.Exec.Args, Dir: req.Dir, Env: req.Env}, req.IO)
 			if err != nil {
 				return nil, err
 			}
+			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
 		}
 	}
 	return &Result{Status: StatusSucceeded, Task: t.Name}, nil
