@@ -56,6 +56,7 @@ func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
 	if _, ok := raw["tasks"]; !ok {
 		return d, fmt.Errorf("tasks is required")
 	}
+	for key := range raw { if key != "version" && key != "vars" && key != "tasks" && key != "files" { return d, fmt.Errorf("unknown definition field %q", key) } }
 	if v, ok := raw["version"].(float64); ok {
 		d.Version = int(v)
 	}
@@ -72,6 +73,7 @@ func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
 		case string:
 			task.Steps = []kscript.Step{{Exec: &kscript.ExecSpec{Program: value}}}
 		case map[string]any:
+			for key := range value { if key != "desc" && key != "if" && key != "run" && key != "deps" { return d, fmt.Errorf("task %s: unknown field %q", name, key) } }
 			if desc, ok := value["desc"].(string); ok {
 				task.Desc = desc
 			}
@@ -80,6 +82,7 @@ func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
 			}
 			if run, ok := value["run"].(string); ok {
 				task.Steps = []kscript.Step{{Exec: &kscript.ExecSpec{Program: run}}}
+			} else if _, present := value["run"]; present { return d, fmt.Errorf("task %s: run must be string", name) }
 			}
 		default:
 			return d, fmt.Errorf("task %s must be string or object", name)
