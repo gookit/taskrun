@@ -46,7 +46,16 @@ func Load(ext string, r io.Reader, source, baseDir string) (kscript.Definition, 
 }
 
 func decode(raw map[string]any, baseDir string) (kscript.Definition, error) {
+	if raw == nil {
+		return kscript.Definition{}, fmt.Errorf("definition must be an object")
+	}
 	d := kscript.Definition{Version: 1, BaseDir: baseDir, Vars: map[string]any{}, Tasks: map[string]kscript.Task{}}
+	if v, ok := raw["version"].(float64); ok && int(v) != 1 {
+		return d, fmt.Errorf("unsupported schema version %d", int(v))
+	}
+	if _, ok := raw["tasks"]; !ok {
+		return d, fmt.Errorf("tasks is required")
+	}
 	if v, ok := raw["version"].(float64); ok {
 		d.Version = int(v)
 	}
