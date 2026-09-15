@@ -122,7 +122,7 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 				return err
 			}
 			if !ok {
-				return &Result{Status: StatusSkipped, Task: t.Name}, nil
+				return nil
 			}
 		}
 		if step.Task != nil {
