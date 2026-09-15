@@ -1,6 +1,7 @@
 package kscript
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -30,8 +31,19 @@ func (ProcessEngine) Execute(ctx context.Context, action PreparedAction, streams
 		}
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = streams.Stdin, streams.Stdout, streams.Stderr
+	var capture bytes.Buffer
+	if streams.CaptureLimit > 0 && streams.Stdout == nil {
+		cmd.Stdout = &capture
+	}
 	err := cmd.Run()
 	result := ActionResult{}
+	if streams.CaptureLimit > 0 && streams.Stdout == nil {
+		result.Output = capture.Bytes()
+		if int64(len(result.Output)) > streams.CaptureLimit {
+			result.Output = result.Output[:streams.CaptureLimit]
+			result.Truncated = true
+		}
+	}
 	if cmd.ProcessState != nil {
 		code := cmd.ProcessState.ExitCode()
 		result.ExitCode = &code
