@@ -143,6 +143,12 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 	}
 	result := &Result{Status: StatusSucceeded, Task: t.Name}
 	if err := r.runTask(ctx, t, req, result, map[string]bool{}); err != nil {
+		if errors.Is(err, context.Canceled) {
+			result.Status = StatusCanceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			result.Status = StatusTimedOut
+		}
 		return nil, err
 	}
 	return result, nil
@@ -274,6 +280,11 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 			}
 			ar, err := r.cfg.engine.Execute(stepCtx, action, req.IO)
 			if err != nil {
+				if step.IgnoreError {
+					result.Status = StatusSucceededWithWarnings
+					result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceededWithWarnings, Err: err})
+					continue
+				}
 				return err
 			}
 			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})

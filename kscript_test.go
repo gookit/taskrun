@@ -82,3 +82,14 @@ func TestInspectExpandsActions(t *testing.T) {
 		t.Fatalf("plan=%+v err=%v", p, err)
 	}
 }
+
+func TestIgnoreError(t *testing.T) {
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"x": {Name: "x", Steps: []Step{{IgnoreError: true, Exec: &ExecSpec{Program: "definitely-not-found"}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.Run(context.Background(), Request{Task: "x"})
+	if err != nil || res.Status != StatusSucceededWithWarnings {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+}
