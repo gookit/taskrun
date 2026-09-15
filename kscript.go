@@ -107,6 +107,22 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 	}
 	stack[t.Name] = true
 	defer delete(stack, t.Name)
+	if t.Dir != "" {
+		req.Dir = t.Dir
+	}
+	if len(t.Env) > 0 {
+		if req.Env == nil {
+			req.Env = map[string]string{}
+		}
+		merged := map[string]string{}
+		for k, v := range req.Env {
+			merged[k] = v
+		}
+		for k, v := range t.Env {
+			merged[k] = v
+		}
+		req.Env = merged
+	}
 	if ok, err := evalCondition(t.If, req.Vars); err != nil {
 		return err
 	} else if !ok {
