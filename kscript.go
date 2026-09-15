@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/expr-lang/expr"
@@ -160,6 +162,19 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 	if t.Dir != "" {
 		req.Dir = t.Dir
 	}
+	if req.Vars == nil {
+		req.Vars = map[string]any{}
+	}
+	if len(t.Vars) > 0 {
+		m := map[string]any{}
+		for k, v := range req.Vars {
+			m[k] = v
+		}
+		for k, v := range t.Vars {
+			m[k] = v
+		}
+		req.Vars = m
+	}
 	if len(t.Env) > 0 {
 		if req.Env == nil {
 			req.Env = map[string]string{}
@@ -188,6 +203,21 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 		}
 	}
 	for _, step := range t.Steps {
+		stepDir := req.Dir
+		if step.Dir != "" {
+			stepDir = step.Dir
+		}
+		stepVars := req.Vars
+		if len(step.Vars) > 0 {
+			m := map[string]any{}
+			for k, v := range req.Vars {
+				m[k] = v
+			}
+			for k, v := range step.Vars {
+				m[k] = v
+			}
+			stepVars = m
+		}
 		stepCtx := ctx
 		if step.Timeout > 0 {
 			var cancel context.CancelFunc
@@ -195,7 +225,7 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 			defer cancel()
 		}
 		if step.If != "" {
-			ok, err := evalCondition(step.If, req.Vars)
+			ok, err := evalCondition(step.If, stepVars)
 			if err != nil {
 				return err
 			}
@@ -220,11 +250,14 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 			}
 			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
 		} else {
-			action := PreparedAction{Dir: req.Dir, Env: req.Env}
+			action := PreparedAction{Dir: stepDir, Env: req.Env}
 			if step.Exec != nil {
 				action.Kind = "exec"
-				action.Program = step.Exec.Program
-				action.Args = step.Exec.Args
+				action.Program = render(step.Exec.Program, stepVars, req)
+				action.Args = make([]string, len(step.Exec.Args))
+				for i, v := range step.Exec.Args {
+					action.Args[i] = render(v, stepVars, req)
+				}
 			}
 			if step.Shell != nil {
 				action.Kind = "shell"
@@ -267,6 +300,33 @@ func evalCondition(source string, vars map[string]any) (bool, error) {
 	}
 	return ok, nil
 }
+
+var variablePattern = regexp.MustCompile(`\$\{(vars|env|args)\.([^}]+)\}`)
+
+func render(value string, vars map[string]any, req Request) string {
+	return variablePattern.ReplaceAllStringFunc(value, func(token string) string {
+		parts := variablePattern.FindStringSubmatch(token)
+		if len(parts) != 3 {
+			return token
+		}
+		switch parts[1] {
+		case "vars":
+			if v, ok := vars[parts[2]]; ok {
+				return fmt.Sprint(v)
+			}
+		case "env":
+			if v, ok := req.Env[parts[2]]; ok {
+				return v
+			}
+		case "args":
+			if i, err := strconv.Atoi(parts[2]); err == nil && i > 0 && i <= len(req.Args) {
+				return req.Args[i-1]
+			}
+		}
+		return token
+	})
+}
+
 func validateDefinition(d Definition, c runnerConfig) error {
 	for n, t := range d.Tasks {
 		if n == "" || t.Name != "" && t.Name != n {
