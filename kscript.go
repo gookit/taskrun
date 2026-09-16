@@ -361,6 +361,11 @@ func validateDefinition(d Definition, c runnerConfig) error {
 			}
 		}
 	}
+	for name, file := range d.Files {
+		if name == "" || file.Path == "" || file.Interpreter.Program == "" {
+			return fmt.Errorf("%w: invalid script file %s", ErrInvalidDefinition, name)
+		}
+	}
 	return nil
 }
 func cloneDefinition(d Definition) Definition { return d }

@@ -83,6 +83,13 @@ func TestInspectExpandsActions(t *testing.T) {
 	}
 }
 
+func TestInvalidScriptFileDefinition(t *testing.T) {
+	_, err := New(Definition{BaseDir: ".", Files: map[string]ScriptFile{"bad": {Path: "x"}}})
+	if err == nil {
+		t.Fatal("expected invalid script file")
+	}
+}
+
 func TestIgnoreError(t *testing.T) {
 	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"x": {Name: "x", Steps: []Step{{IgnoreError: true, Exec: &ExecSpec{Program: "definitely-not-found"}}}}}})
 	if err != nil {
