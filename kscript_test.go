@@ -90,6 +90,20 @@ func TestInvalidScriptFileDefinition(t *testing.T) {
 	}
 }
 
+func TestCaptureStderr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix command fixture")
+	}
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"x": {Name: "x", Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "printf err >&2"}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.Run(context.Background(), Request{Task: "x", IO: IO{CaptureLimit: 20}})
+	if err != nil || len(res.Steps) != 1 || string(res.Steps[0].ErrorOutput) != "err" {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+}
+
 func TestIgnoreError(t *testing.T) {
 	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"x": {Name: "x", Steps: []Step{{IgnoreError: true, Exec: &ExecSpec{Program: "definitely-not-found"}}}}}})
 	if err != nil {
