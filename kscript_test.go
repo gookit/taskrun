@@ -101,6 +101,20 @@ func TestListIsStable(t *testing.T) {
 	}
 }
 
+func TestStepEnvReachesHandler(t *testing.T) {
+	seen := ""
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"x": {Name: "x", Steps: []Step{{Env: map[string]string{"K": "V"}, Host: &HostSpec{Name: "capture"}}}}}}, WithHandler("capture", func(_ context.Context, call HostCall) (ActionResult, error) {
+		seen = call.Env["K"]
+		return ActionResult{}, nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.Run(context.Background(), Request{Task: "x"}); err != nil || seen != "V" {
+		t.Fatalf("seen=%q err=%v", seen, err)
+	}
+}
+
 func TestCaptureStderr(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("unix command fixture")

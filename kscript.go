@@ -233,6 +233,17 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 			}
 			stepVars = m
 		}
+		stepEnv := req.Env
+		if len(step.Env) > 0 {
+			m := map[string]string{}
+			for k, v := range req.Env {
+				m[k] = v
+			}
+			for k, v := range step.Env {
+				m[k] = v
+			}
+			stepEnv = m
+		}
 		stepCtx := ctx
 		if step.Timeout > 0 {
 			var cancel context.CancelFunc
@@ -254,18 +265,22 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 			if err != nil {
 				return err
 			}
-			if err := r.runTask(ctx, ct, req, result, stack); err != nil {
+			childReq := req
+			childReq.Dir = stepDir
+			childReq.Vars = stepVars
+			childReq.Env = stepEnv
+			if err := r.runTask(ctx, ct, childReq, result, stack); err != nil {
 				return err
 			}
 		} else if step.Host != nil {
 			h := r.cfg.handlers[step.Host.Name]
-			ar, err := h(stepCtx, HostCall{Name: step.Host.Name, Args: step.Host.Args, Vars: req.Vars, Env: req.Env, Dir: req.Dir})
+			ar, err := h(stepCtx, HostCall{Name: step.Host.Name, Args: step.Host.Args, Vars: stepVars, Env: stepEnv, Dir: stepDir})
 			if err != nil {
 				return err
 			}
 			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output, ErrorOutput: ar.ErrorOutput})
 		} else {
-			action := PreparedAction{Dir: stepDir, Env: req.Env}
+			action := PreparedAction{Dir: stepDir, Env: stepEnv}
 			if step.Exec != nil {
 				action.Kind = "exec"
 				action.Program = render(step.Exec.Program, stepVars, req)
