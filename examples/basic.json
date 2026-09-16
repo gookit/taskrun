@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "vars": {"message": "hello from kscript"},
+  "tasks": {
+    "hello": {
+      "run": "go",
+      "if": "enabled"
+    }
+  }
+}
