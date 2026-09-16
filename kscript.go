@@ -130,7 +130,10 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 		return nil, err
 	}
 	if req.DryRun {
-		p := Plan{Task: t.Name}
+		p, err := r.Inspect(ctx, req)
+		if err != nil {
+			return nil, err
+		}
 		return &Result{Status: StatusDryRun, Task: t.Name, Plan: &p}, nil
 	}
 	if ok, err := evalCondition(t.If, req.Vars); err != nil {
