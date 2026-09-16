@@ -135,12 +135,13 @@ type Result struct {
 
 // StepResult records one step outcome.
 type StepResult struct {
-	Name      string
-	Status    Status
-	ExitCode  *int
-	Output    []byte
-	Truncated bool
-	Err       error
+	Name        string
+	Status      Status
+	ExitCode    *int
+	Output      []byte
+	ErrorOutput []byte
+	Truncated   bool
+	Err         error
 }
 
 // Plan is a side-effect-free execution preview.
@@ -162,9 +163,10 @@ type PlannedAction struct {
 
 // ActionResult is returned by an Engine or Handler.
 type ActionResult struct {
-	ExitCode  *int
-	Output    []byte
-	Truncated bool
+	ExitCode    *int
+	Output      []byte
+	ErrorOutput []byte
+	Truncated   bool
 }
 
 // HostCall is the isolated input to a Handler.

@@ -254,7 +254,7 @@ func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Resul
 			if err != nil {
 				return err
 			}
-			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
+			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output, ErrorOutput: ar.ErrorOutput})
 		} else {
 			action := PreparedAction{Dir: stepDir, Env: req.Env}
 			if step.Exec != nil {
