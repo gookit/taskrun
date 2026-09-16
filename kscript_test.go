@@ -90,6 +90,17 @@ func TestInvalidScriptFileDefinition(t *testing.T) {
 	}
 }
 
+func TestListIsStable(t *testing.T) {
+	r, err := New(Definition{BaseDir: ".", Tasks: map[string]Task{"z": {Name: "z", Steps: []Step{{Exec: &ExecSpec{Program: "z"}}}}, "a": {Name: "a", Steps: []Step{{Exec: &ExecSpec{Program: "a"}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := r.List()
+	if len(items) != 2 || items[0].Name != "a" || items[1].Name != "z" {
+		t.Fatalf("items=%+v", items)
+	}
+}
+
 func TestCaptureStderr(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("unix command fixture")

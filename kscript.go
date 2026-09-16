@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"time"
 
@@ -52,9 +53,14 @@ func (r *Runner) Lookup(name string) (Task, error) {
 	return cloneTask(t), nil
 }
 func (r *Runner) List() []Task {
-	out := make([]Task, 0, len(r.def.Tasks))
-	for _, t := range r.def.Tasks {
-		out = append(out, cloneTask(t))
+	names := make([]string, 0, len(r.def.Tasks))
+	for name := range r.def.Tasks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]Task, 0, len(names))
+	for _, name := range names {
+		out = append(out, cloneTask(r.def.Tasks[name]))
 	}
 	return out
 }
