@@ -45,6 +45,14 @@ GOOS=darwin go build ./...     # 通过
 GOTOOLCHAIN=go1.23.12 go build ./...   # 通过（Go 1.23 语言/API 兼容）
 go run ./cmd/kscript -config ./examples/basic.json -task hello          # 通过，输出 go version
 go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过，输出计划
+go list -deps ./...            # 只有标准库与 expr/go-yaml/toml，无 inhere/kite-go、gcli、cliui、gookit/slog
+
+# 工作区外的独立 module（仅导入主包）
+cd ../../tmp/kscript-consumer && go test -count=1 ./...   # 通过；go list -deps 无 kite-go
+
+# Kite 侧（迁移状态）
+cd ../../inhere-tools/kite-go && go build ./...
+go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引擎与配置级对照
 ```
 
 未完成的验证：
@@ -58,7 +66,7 @@ go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过
 
 | ID | 场景 | 现状 |
 |---|---|---|
-| A01 | 外部 module 只导入主包执行任务 | 本地 `tmp/kscript-consumer` 用 replace 编译通过；正式验收待发布版本 |
+| A01 | 外部 module 只导入主包执行任务 | 本地通过：`tmp/kscript-consumer` 编译、测试、`go list -deps` 无 kite-go；发布版本后的正式验收待外部动作 |
 | A02 | 三格式等价与非法输入定位 | 覆盖（`formats` 测试） |
 | A03 | 缺失 deps、混合环、展开超限 | 覆盖（`TestCycleIsRejectedAtNewWithPath`、`TestExpansionLimitAtRuntime`） |
 | A04 | 菱形依赖与重复调用 | 覆盖（`TestDiamondDependencyRunsTwice`） |
