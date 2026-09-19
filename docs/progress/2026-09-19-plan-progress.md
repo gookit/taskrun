@@ -29,7 +29,7 @@
 | T06 进程/Shell/file/host 引擎 | 基本完成 | `process_engine.go`；显式 Shell 选择、argv 不二次分词、file 走注册表解释器、dry-run 零副作用、错误分类 |
 | T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object、宽限期、能力不可用即失败、`Canceled`/`TimedOut` 分类 |
 | T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
-| T09 Kite 迁移 | 部分 | `formats/legacy.go` 转换器与 `docs/kite-migration.md` 完成；Kite 侧调用方尚未切换到新库，旧 fixture 前后对照未做 |
+| T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器 + `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；卡在：列表/搜索路径、旧 fixture 运行对照、真实配置端到端 |
 | T10 第二应用与 Go 版本矩阵 | 未完成 | CI matrix 定义存在但未运行；第二真实应用未确认，`tmp/kscript-consumer` 使用 `replace`，不构成可复用验收 |
 | T11 文档、版本与发布准备 | 部分 | README/中文 README/kite-migration/CHANGELOG 完成；缺版本号、LICENSE 复核与发布候选审查 |
 
@@ -71,7 +71,7 @@ go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过
 | A11 | 超时/取消清理进程树 | 覆盖（子进程树标记文件用例） |
 | A12 | 大输出、截断、writer 失败 | 覆盖 |
 | A13 | 非零退出、ignore_error、取消、未知根任务 | 覆盖 |
-| A14 | Kite 旧配置 fixture 行为对照 | 转换器侧覆盖；Kite 运行侧未做 |
+| A14 | Kite 旧配置 fixture 行为对照 | 部分（转换等价性与桥接单任务执行有测试；两引擎运行结果逐项对照未做） |
 | A15 | 第二真实应用 | 未完成 |
 
 ## 与计划的偏差（需评审确认）
@@ -83,10 +83,11 @@ go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过
 | `Inspect` 增加 ctx | 设计草案签名为 `Inspect(req)`；实现为 `Inspect(ctx, req)`，以便取消与一致性，语义未变 |
 | `BaseDir` 必须绝对 | 设计明确要求；`formats.LoadFile` 自动转换为绝对路径，调用方需注意 |
 | 第二应用 | T01 Gate 未确认路径，仍为开放项 |
+| Kite 依赖方式 | `kite-go/go.mod` 使用临时 `replace => ../../gookit2/kscript`（设计允许的本地迁移验证）；发布版本后需改为真实版本号 |
+| Kite 引擎开关 | 新增 `script_engine: legacy|kscript`（默认 `legacy`），作为回退点；旧 Runner 未被删除 |
 
 ## 下一步
 
-1. T09 剩余：Kite 侧适配接入（`runany.go`/`service.go`/CLI 的分阶段替换、旧实现开关、fixture 前后对照与 kite-go 测试）。
-2. T08 剩余：`examples/basic`、`examples/config`、`examples/host` 三个可运行示例。
-3. T10：确认第二真实应用并接入；在真实 runner 上执行 Go 1.23/1.25 与 race 矩阵。
-4. T11：`CHANGELOG.md`、版本号、发布候选审查。
+1. T09 剩余：Kite 列表/搜索/`--show` 路径切换；旧 fixture 两引擎运行结果对照；在真实 Kite 配置上以 `script_engine: kscript` 端到端验证。
+2. T10：确认第二真实应用并接入；在真实 runner 上执行 Go 1.23/1.25 与 race 矩阵。
+3. T11：LICENSE 复核、版本号与发布候选审查（含把临时 replace 换成真实版本）。

@@ -56,6 +56,51 @@
 `$@`/`$*`/`$1..$N` 的取值由 Kite 适配层在每次运行时按旧 `AppendArgsToVars` 语义写入
 `Request.Vars`（键为 `@`、`*`、`1`…），因此任务文件不需要修改。
 
+## 迁移状态（2026-09-19）
+
+已完成：
+
+- 新库侧 `formats.LegacyDefinition` 转换器（见上表）与 `formats.SplitCommandLine`。
+- Kite 侧 `pkg/kscript/bridge` 适配包：把旧 Runner 已加载的脚本 map、`__settings`、
+  `ScriptDirs`/`AllowedExt`/`ExtToBinMap`、运行期变量（`ctx.Vars`、`$@`/`$*`/`$1..N`、
+  `time`/`workdir`/`dirname`/`cur_dir`、`AppendVarsFn` 的 `gvs`/`paths`/`kite`）转成
+  `kscript.Definition` 与 `Request`，并提供 `TryRun`/`Run`（未匹配返回 found=false，
+  便于继续系统命令兜底）。
+- Kite 侧引擎开关：配置 `script_engine: legacy|kscript`，默认 `legacy`。
+  `cmdbiz.RunScriptName`/`RunScriptOnly` 按开关分发；`RunAny` 与
+  `kite run --type=script` 已接入。旧 Runner 保留为回退点，转换失败时桥接自动回退到
+  旧实现（`WithLegacyFallback(true)`）并记录 warning。
+- Kite 侧新增只读访问器 `SettingsData`、`ScriptFileMap`、`ExtToBin`，旧包其余行为不变。
+
+依赖方式：当前 `kite-go/go.mod` 使用临时 `replace github.com/gookit/kscript =>
+../../gookit2/kscript`（设计允许的本地迁移验证方式）。发布正式版本后应改为真实版本号；
+该 replace 是本迁移的临时状态，不影响新库。
+
+验证（2026-09-19）：
+
+```bash
+# 新库
+cd gookit2/kscript && go build ./... && go vet ./... && go test -count=1 ./...
+
+# Kite 侧
+cd inhere-tools/kite-go && go build ./...
+go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/
+```
+
+结果：全部通过。`pkg/quickjump`（既有断言差异）与 `pkg/simpleai`（既有 vet 报错，
+`fmt.Println` 多余换行、非常量格式串）在本次改动前即失败，与迁移无关。
+
+已修复的既有缺陷：`ScriptTask.resolveIfExpr` 对空条件直接 `expr.Compile("")` 会 panic；
+现在空条件返回 true。设计明确新实现不保留 panic，该测试此前一直 panic 失败。
+
+## 尚未完成
+
+- Kite 侧列表/搜索/`--show` 路径仍使用旧 Runner 解析（`Search`、`LoadScriptTaskInfo`、
+  `RawScriptTasks` 等），切换这些只读路径需要在新库上重建等价的展示模型。
+- 旧 fixture 的运行结果逐项对照（同一配置分别用两个引擎运行并比较输出）尚未落地；
+  当前只有转换等价性与单任务执行证据。
+- `script_engine: kscript` 尚未在真实 Kite 配置上端到端运行验证。
+
 ## 行为差异（有意修复）
 
 | 旧行为 | 新行为 |
