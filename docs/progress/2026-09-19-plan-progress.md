@@ -43,6 +43,7 @@ gofmt -l .                     # 无输出
 GOOS=linux  go build ./...     # 通过（POSIX 分支）
 GOOS=darwin go build ./...     # 通过
 GOTOOLCHAIN=go1.23.12 go build ./...   # 通过（Go 1.23 语言/API 兼容）
+GOTOOLCHAIN=go1.23.12 go test -count=1 ./...   # 通过（Go 1.23 也跑测试，不只是编译）
 go run ./cmd/kscript -config ./examples/basic.json -task hello          # 通过，输出 go version
 go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过，输出计划
 go list -deps ./...            # 只有标准库与 expr/go-yaml/toml，无 inhere/kite-go、gcli、cliui、gookit/slog
@@ -58,7 +59,8 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引�
 未完成的验证：
 
 - `go test -race ./...`：本机为 Windows 且无 C 工具链（`CGO_ENABLED=0`，无 gcc），无法运行；
-  需要在 Linux runner 或安装 gcc 后执行。
+  需要在 Linux runner 或安装 gcc 后执行。替代措施：`TestConcurrentRunsAreIsolated`
+  用 16 个并发 Run × 4 轮、每轮校验输出等于本请求的变量值，可在没有 race 检测时发现跨请求串值。
 - CI matrix（Go 1.23.x/1.25.x、ubuntu/windows）尚未在真实 runner 上执行（无远端）。
 - 第二真实应用接入与结果记录（T10）。
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"testing"
@@ -577,25 +578,35 @@ func TestConcurrentRunsAreIsolated(t *testing.T) {
 			Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "printf %s \"${vars.who}\""}}},
 		}},
 	})
-	done := make(chan string, 8)
-	for i := 0; i < 8; i++ {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("requires a sh interpreter to exercise the process boundary")
+	}
+	const workers = 16
+	const rounds = 4
+	done := make(chan string, workers)
+	for i := 0; i < workers; i++ {
 		go func(i int) {
 			who := fmt.Sprintf("w%d", i)
-			var out strings.Builder
-			_, err := r.Run(context.Background(), Request{
-				Task: "t", Vars: map[string]any{"who": who}, Env: map[string]string{"WHO": who},
-				IO: IO{Stdout: &out, CaptureLimit: 64},
-			})
-			if err != nil {
-				done <- "err:" + err.Error()
-				return
+			for round := 0; round < rounds; round++ {
+				var out strings.Builder
+				if _, err := r.Run(context.Background(), Request{
+					Task: "t", Vars: map[string]any{"who": who}, Env: map[string]string{"WHO": who},
+					IO: IO{Stdout: &out, CaptureLimit: 64},
+				}); err != nil {
+					done <- "err:" + err.Error()
+					return
+				}
+				// A cross-request leak would show another worker's value here.
+				if out.String() != who {
+					done <- fmt.Sprintf("leak: got %q want %q", out.String(), who)
+					return
+				}
 			}
-			done <- out.String()
+			done <- "ok"
 		}(i)
 	}
-	for i := 0; i < 8; i++ {
-		got := <-done
-		if strings.HasPrefix(got, "err:") {
+	for i := 0; i < workers; i++ {
+		if got := <-done; got != "ok" {
 			t.Fatal(got)
 		}
 	}
