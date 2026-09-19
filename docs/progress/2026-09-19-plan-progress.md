@@ -31,7 +31,7 @@
 | T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
 | T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器（含 ParseEnv 的 `${env.*}` 重写）+ `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；旧 fixture 双引擎对照已通过；卡在：列表/搜索路径、真实配置端到端 |
 | T10 第二应用与 Go 版本矩阵 | 未完成 | CI matrix 定义存在但未运行；第二真实应用未确认，`tmp/kscript-consumer` 使用 `replace`，不构成可复用验收 |
-| T11 文档、版本与发布准备 | 部分 | README/中文 README/kite-migration/CHANGELOG 完成；缺版本号、LICENSE 复核与发布候选审查 |
+| T11 文档、版本与发布准备 | 基本完成 | README/中文 README/kite-migration/CHANGELOG 完成；LICENSE 保留源码原始版权行；`docs/release/2026-09-19-v0.1.0-candidate-review.md` 形成发布候选（含依赖许可证、API 面、限制与发布清单）；缺外部动作授权（建远端/推送/tag/发布） |
 
 ## 验证命令与结果（2026-09-19）
 
@@ -90,4 +90,5 @@ go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过
 
 1. T09 剩余：Kite 列表/搜索/`--show` 路径切换；旧 fixture 两引擎运行结果对照；在真实 Kite 配置上以 `script_engine: kscript` 端到端验证。
 2. T10：确认第二真实应用并接入；在真实 runner 上执行 Go 1.23/1.25 与 race 矩阵。
-3. T11：LICENSE 复核、版本号与发布候选审查（含把临时 replace 换成真实版本）。
+3. T11 剩余（均需外部动作授权）：创建远端仓库、推送、打 `v0.1.0` tag、发布；
+   之后把 `kite-go/go.mod` 的临时 replace 换成真实版本号并做工作区外验收。
