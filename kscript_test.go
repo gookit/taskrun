@@ -742,6 +742,42 @@ func TestRejectsUnsupportedRequestData(t *testing.T) {
 	}
 }
 
+// TestNestedVariablePathsRender covers legacy style nested access such as
+// ${vars.gvs.app} and ${vars.time.datetime}.
+func TestNestedVariablePathsRender(t *testing.T) {
+	var seen []string
+	r := newTestRunner(t, Definition{
+		Vars: map[string]any{
+			"gvs":  map[string]any{"app": "kite", "deep": map[string]any{"n": int64(2)}},
+			"time": map[string]any{"datetime": "2026-09-19 00:00:00"},
+		},
+		Tasks: map[string]Task{"t": {Steps: []Step{{Host: &HostSpec{
+			Name: "capture",
+			Args: []any{"${vars.gvs.app}", "${vars.gvs.deep.n}", "${vars.time.datetime}"},
+		}}}}},
+	}, WithHandler("capture", func(_ context.Context, call HostCall) (ActionResult, error) {
+		for _, arg := range call.Args {
+			seen = append(seen, arg.(string))
+		}
+		return ActionResult{}, nil
+	}))
+	mustRun(t, r, Request{Task: "t"})
+	want := []string{"kite", "2", "2026-09-19 00:00:00"}
+	for i := range want {
+		if seen[i] != want[i] {
+			t.Fatalf("seen=%v want=%v", seen, want)
+		}
+	}
+	// A missing nested segment is still an error.
+	bad := newTestRunner(t, Definition{
+		Vars:  map[string]any{"gvs": map[string]any{"app": "kite"}},
+		Tasks: map[string]Task{"t": {Steps: []Step{{Exec: &ExecSpec{Program: "go", Args: []string{"${vars.gvs.missing}"}}}}}},
+	})
+	if _, err := bad.Run(context.Background(), Request{Task: "t"}); err == nil {
+		t.Fatal("expected an unknown reference error")
+	}
+}
+
 type countingEngine struct {
 	inner Engine
 	runs  *int

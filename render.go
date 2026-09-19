@@ -60,16 +60,24 @@ func renderTemplate(source string, rv renderVars) (string, error) {
 func lookupTemplate(namespace, name string, rv renderVars) (string, error) {
 	switch namespace {
 	case "vars":
-		if value, ok := rv.Vars[name]; ok {
+		if value, ok := lookupPath(rv.Vars, name); ok {
 			return renderScalar("vars."+name, value)
 		}
 		if rv.Dynamic != nil {
-			value, found, err := rv.Dynamic(name)
+			// Only a top-level name can be produced by a dynamic variable.
+			top := name
+			if index := strings.IndexByte(top, '.'); index >= 0 {
+				top = top[:index]
+			}
+			value, found, err := rv.Dynamic(top)
 			if err != nil {
 				return "", err
 			}
 			if found {
-				return renderScalar("vars."+name, value)
+				merged := mergeDataMaps(rv.Vars, map[string]any{top: value})
+				if resolved, ok := lookupPath(merged, name); ok {
+					return renderScalar("vars."+name, resolved)
+				}
 			}
 		}
 		return "", deferredOrInvalid("variable", name)
@@ -88,18 +96,46 @@ func lookupTemplate(namespace, name string, rv renderVars) (string, error) {
 		}
 		return rv.Args[index-1], nil
 	case "host":
-		if value, ok := rv.Host[name]; ok {
+		if value, ok := lookupPath(rv.Host, name); ok {
 			return renderScalar("host."+name, value)
 		}
 		return "", invalidDef("unknown host reference ${host.%s}", name)
 	case "run":
-		if value, ok := rv.Run[name]; ok {
+		if value, ok := lookupPath(rv.Run, name); ok {
 			return renderScalar("run."+name, value)
 		}
 		return "", invalidDef("unknown run reference ${run.%s}", name)
 	default:
 		return "", invalidDef("unknown template namespace ${%s.%s}; use vars, env, args, host or run", namespace, name)
 	}
+}
+
+// lookupPath resolves a possibly dotted name such as "time.datetime" through
+// nested string-keyed maps. It never calls host methods.
+func lookupPath(root map[string]any, name string) (any, bool) {
+	if root == nil {
+		return nil, false
+	}
+	if value, ok := root[name]; ok {
+		return value, true
+	}
+	if !strings.Contains(name, ".") {
+		return nil, false
+	}
+	segments := strings.Split(name, ".")
+	var current any = root
+	for _, segment := range segments {
+		asMap, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		value, ok := asMap[segment]
+		if !ok {
+			return nil, false
+		}
+		current = value
+	}
+	return current, true
 }
 
 func deferredOrInvalid(kind, name string) error {

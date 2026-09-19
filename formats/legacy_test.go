@@ -225,6 +225,26 @@ func TestLegacyConvertedDefinitionValidatesAndRuns(t *testing.T) {
 	}
 }
 
+func TestLegacyNestedPathsAreTranslated(t *testing.T) {
+	scripts := map[string]any{"t": map[string]any{
+		"run": "echo $gvs.app ${paths.tmp} $time.datetime $unknown.thing",
+	}}
+	result := convertFixture(t, LegacyOptions{
+		Scripts:     scripts,
+		RuntimeVars: []string{"gvs", "paths", "time"},
+	})
+	args := result.Definition.Tasks["t"].Steps[0].Exec.Args
+	want := []string{"${vars.gvs.app}", "${vars.paths.tmp}", "${vars.time.datetime}", "$unknown.thing"}
+	if len(args) != len(want) {
+		t.Fatalf("args=%v want=%v", args, want)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args=%v want=%v", args, want)
+		}
+	}
+}
+
 func hasWarning(warnings []string, needle string) bool {
 	for _, warning := range warnings {
 		if strings.Contains(warning, needle) {

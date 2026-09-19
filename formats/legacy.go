@@ -689,12 +689,9 @@ func translateLegacyTemplate(text string, known map[string]bool, warn func(strin
 			continue
 		}
 		if isIdentifierStart(next) {
-			j := i + 1
-			for j < len(text) && isIdentifierPart(text[j]) {
-				j++
-			}
+			j := legacyPathEnd(text, i+1)
 			name := text[i+1 : j]
-			if known[name] {
+			if known[topSegment(name)] {
 				b.WriteString("${vars." + name + "}")
 			} else {
 				b.WriteString(text[i:j])
@@ -718,11 +715,35 @@ func translateLegacyName(inner string, known map[string]bool) string {
 		return "${vars." + inner + "}"
 	case inner != "" && allDigits(inner):
 		return "${args." + inner + "}"
-	case known[inner]:
+	case known[topSegment(inner)]:
 		return "${vars." + inner + "}"
 	default:
 		return "${" + inner + "}"
 	}
+}
+
+// topSegment returns the first dotted segment of a legacy variable path.
+func topSegment(name string) string {
+	if index := strings.IndexByte(name, '.'); index >= 0 {
+		return name[:index]
+	}
+	return name
+}
+
+// legacyPathEnd returns the end offset of a dotted legacy path starting at
+// start, for example "gvs.var" or "time.datetime".
+func legacyPathEnd(text string, start int) int {
+	index := start
+	for index < len(text) && isIdentifierPart(text[index]) {
+		index++
+	}
+	for index < len(text) && text[index] == '.' && index+1 < len(text) && isIdentifierStart(text[index+1]) {
+		index++
+		for index < len(text) && isIdentifierPart(text[index]) {
+			index++
+		}
+	}
+	return index
 }
 
 func allDigits(text string) bool {
