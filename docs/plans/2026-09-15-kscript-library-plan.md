@@ -44,7 +44,8 @@
 ## 输入与批准证据
 
 - 设计：[2026-09-15-kscript-library-design.md](../design/2026-09-15-kscript-library-design.md)，revision 0.2，candidate commit `bf307538cdbed3f9a0a1eafa40784a45256db7b3`。
-- 评审：[2026-09-15-kscript-library-design-review.md](../review/2026-09-15-kscript-library-design-review.md)，针对同一 candidate 的 Standards/Governance 与 Spec/Executability 双轴结论 PASS，未发现核心阻断。
+- 评审：`2026-09-15-kscript-library-design-review.md`，针对同一 candidate 的 Standards/Governance 与 Spec/Executability 双轴结论 PASS，未发现核心阻断。
+  该评审文档仍留在 kite-go 工作区（`inhere-tools/kite-go/docs/review/`），迁入新库时未随之移动，因此这里不再以相对链接引用。
 - 当前用户请求：“OK 审核一遍，没问题出实施计划”；该请求授权生成本计划，不等同于批准实施。
 - 工作区绑定：`D:/work/inhere/my-tools-dev/standards.json`，IDEV-STD 0.19.0、profile `go-tools`、revision `9dc4a010355e1eb7a5c53f99558495df09eb9553`；`probe=BOUND`、`validate=PASS`。
 

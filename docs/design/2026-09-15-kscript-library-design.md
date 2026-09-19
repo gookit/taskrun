@@ -103,19 +103,19 @@ codebase-memory 项目为 `kite-go`，generation 为 `2026-09-14T15:44:51Z`。�
 
 | 已确认事实 | 源码依据 | 对设计的影响 |
 |---|---|---|
-| kscript Go 文件没有直接导入 Kite internal 包；仍使用 gookit 工具、配置、日志和 CLI 展示依赖 | [runner.go](../../pkg/kscript/runner.go)、[runner_run.go](../../pkg/kscript/runner_run.go)、[type_task.go](../../pkg/kscript/type_task.go)、[types.go](../../pkg/kscript/types.go) 的 import | 抽离基础较好，但需要消除直接打印和可变全局状态；不仅是改 module path |
-| 已有字符串、命令数组、结构化 map 等任务形态 | `parseScriptTask`、`LoadFromMap`，[type_task.go](../../pkg/kscript/type_task.go) | 为旧文件提供转换器，新核心只接收统一模型 |
-| 已有 deps 顺序递归执行及 @task: 引用 | `runScriptTask`，[runner_run.go](../../pkg/kscript/runner_run.go)；`loadRun`，[type_task.go](../../pkg/kscript/type_task.go) | 首期保留顺序与重复调用行为，新增完整引用校验和循环检测 |
-| 已导入 expr；resolveIfExpr 仍 panic、打印且固定返回 true，正常任务执行路径未调用此方法 | `resolveIfExpr` 与 `LoadFromMap`，[type_task.go](../../pkg/kscript/type_task.go)；`runScriptTask` | expr 是现有依赖，不是首次引入；需要补齐条件字段解析和真实执行语义 |
+| kscript Go 文件没有直接导入 Kite internal 包；仍使用 gookit 工具、配置、日志和 CLI 展示依赖 | [runner.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/runner.go)、[runner_run.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/runner_run.go)、[type_task.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/type_task.go)、[types.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/types.go) 的 import | 抽离基础较好，但需要消除直接打印和可变全局状态；不仅是改 module path |
+| 已有字符串、命令数组、结构化 map 等任务形态 | `parseScriptTask`、`LoadFromMap`，[type_task.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/type_task.go) | 为旧文件提供转换器，新核心只接收统一模型 |
+| 已有 deps 顺序递归执行及 @task: 引用 | `runScriptTask`，[runner_run.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/runner_run.go)；`loadRun`，[type_task.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/type_task.go) | 首期保留顺序与重复调用行为，新增完整引用校验和循环检测 |
+| 已导入 expr；resolveIfExpr 仍 panic、打印且固定返回 true，正常任务执行路径未调用此方法 | `resolveIfExpr` 与 `LoadFromMap`，[type_task.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/type_task.go)；`runScriptTask` | expr 是现有依赖，不是首次引入；需要补齐条件字段解析和真实执行语义 |
 | 动态变量已有 @sh:/@exec: 执行；发生在普通命令 dry-run 之前 | `resolveDynVars`、`buildTaskRenderVars` | 预览必须禁止动态变量执行；取消、超时和错误处理必须统一 |
 | 存在包级可变 renderer，递归任务共用并修改 RunCtx，EnvPaths 和变量也会被执行过程修改 | `rpl`、`runScriptTask`、`svRender`、`ParseVarInEnv` | 库化时必须按 Run/Task/Step 建立独立状态，不能声明现状已并发安全 |
-| Shell 执行统一使用 shell -c；脚本 .go 映射是字符串 go run | `runScriptTask`、`runScriptFile`，[kscript.go](../../pkg/kscript/kscript.go) | Windows Shell 参数和解释器前置参数需要结构化表示 |
-| 加载完成标记在加载成功前设置；部分错误可被 Run/TryRun 分发路径覆盖 | `LoadScriptTasks`，[runner.go](../../pkg/kscript/runner.go)；`Run`、`TryRun` | 改用先构造、验证、再发布完整快照，严格区分未找到与加载/执行错误 |
-| 自动发现会逐层查找、每层最多取一个匹配文件，收集后逆序处理 | `findAutoTaskFiles`，[runner.go](../../pkg/kscript/runner.go) | 实现并非“找到最近文件就完全停止”；旧发现模式留在 Kite，核心发现默认关闭 |
-| Timeout、IgnoreErr、Output、ScriptApp 等字段的存在不代表运行闭环已经完成 | [types.go](../../pkg/kscript/types.go)、`TaskCmd` 及执行循环 | 每个首期公开字段必须有执行语义和验收；未完成的字段不直接复制到公共 API |
-| alias、ext、系统命令分发在 cmdbiz；plugin 是 TODO；Kite 变量由 ConfigScriptCtx 注入 | [runany.go](../../internal/biz/cmdbiz/runany.go)、[service.go](../../internal/boot/service.go) | 外层路由和 Kite 命名空间归消费者；不把计划中的 plugin 当作已有功能 |
-| 当前 Kite go.mod 为 Go 1.25.0，许可证为 MIT | [go.mod](../../go.mod)、[LICENSE](../../LICENSE) | 新库采用 Go 1.23+ 基线；只选择新库实际需要的依赖，保留原版权声明 |
-| 包内现有测试只见一个简短的条件表达式测试 | [runner_test.go](../../pkg/kscript/runner_test.go) | 需要补充行为证据，本设计未声称现有测试通过 |
+| Shell 执行统一使用 shell -c；脚本 .go 映射是字符串 go run | `runScriptTask`、`runScriptFile`，[kscript.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/kscript.go) | Windows Shell 参数和解释器前置参数需要结构化表示 |
+| 加载完成标记在加载成功前设置；部分错误可被 Run/TryRun 分发路径覆盖 | `LoadScriptTasks`，[runner.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/runner.go)；`Run`、`TryRun` | 改用先构造、验证、再发布完整快照，严格区分未找到与加载/执行错误 |
+| 自动发现会逐层查找、每层最多取一个匹配文件，收集后逆序处理 | `findAutoTaskFiles`，[runner.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/runner.go) | 实现并非“找到最近文件就完全停止”；旧发现模式留在 Kite，核心发现默认关闭 |
+| Timeout、IgnoreErr、Output、ScriptApp 等字段的存在不代表运行闭环已经完成 | [types.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/types.go)、`TaskCmd` 及执行循环 | 每个首期公开字段必须有执行语义和验收；未完成的字段不直接复制到公共 API |
+| alias、ext、系统命令分发在 cmdbiz；plugin 是 TODO；Kite 变量由 ConfigScriptCtx 注入 | [runany.go](https://github.com/inhere/kite-go/blob/main/internal/biz/cmdbiz/runany.go)、[service.go](https://github.com/inhere/kite-go/blob/main/internal/boot/service.go) | 外层路由和 Kite 命名空间归消费者；不把计划中的 plugin 当作已有功能 |
+| 当前 Kite go.mod 为 Go 1.25.0，许可证为 MIT | [go.mod](https://github.com/inhere/kite-go/blob/main/go.mod)、[LICENSE](https://github.com/inhere/kite-go/blob/main/LICENSE) | 新库采用 Go 1.23+ 基线；只选择新库实际需要的依赖，保留原版权声明 |
+| 包内现有测试只见一个简短的条件表达式测试 | [runner_test.go](https://github.com/inhere/kite-go/blob/main/pkg/kscript/runner_test.go) | 需要补充行为证据，本设计未声称现有测试通过 |
 
 前述事实修正早期讨论中“没有 deps”“动态变量只有 TODO”“尚未接入 expr”和“plugin 已完成”的表述。配置兼容应以可验证执行行为为准，而非所有已声明字段。
 
