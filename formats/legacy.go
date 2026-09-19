@@ -231,8 +231,16 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 	if typ, ok := legacyString(value, "type"); ok {
 		shell = typ
 	}
+	// Legacy task variables are top level render variables, so their names join
+	// the set of references this task may use.
+	taskKnown := cloneKnownNames(known)
+	if vars, ok := legacyAnyMap(value, "vars"); ok {
+		for key := range vars {
+			taskKnown[key] = true
+		}
+	}
 	if dir, ok := legacyStringOne(value, "dir", "workdir"); ok {
-		task.Dir = translateLegacyTemplate(dir, known, warn, "task "+name+".dir")
+		task.Dir = translateLegacyTemplate(dir, taskKnown, warn, "task "+name+".dir")
 	}
 	if desc, ok := legacyStringOne(value, "desc", "description"); ok {
 		task.Desc = desc
@@ -255,7 +263,7 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 	if env, ok := legacyStringMap(value, "env"); ok {
 		task.Env = map[string]string{}
 		for key, item := range env {
-			task.Env[key] = translateLegacyTemplate(item, known, warn, "task "+name+".env."+key)
+			task.Env[key] = translateLegacyTemplate(item, taskKnown, warn, "task "+name+".env."+key)
 		}
 	}
 	if paths, ok := legacyStringListOne(value, "env_path", "env_paths"); ok {
@@ -271,14 +279,14 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 				continue
 			}
 			if kind, command, ok := legacyDynamicVar(text); ok {
-				spec, err := legacyDynamicSpec(kind, command, shell, known, warn, fmt.Sprintf("task %s.var %s", name, key))
+				spec, err := legacyDynamicSpec(kind, command, shell, taskKnown, warn, fmt.Sprintf("task %s.var %s", name, key))
 				if err != nil {
 					return task, err
 				}
 				dynamic[key] = spec
 				continue
 			}
-			static[key] = translateLegacyTemplate(text, known, warn, fmt.Sprintf("task %s.vars.%s", name, key))
+			static[key] = translateLegacyTemplate(text, taskKnown, warn, fmt.Sprintf("task %s.vars.%s", name, key))
 		}
 		if len(static) > 0 {
 			task.Vars = static
@@ -305,7 +313,7 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 			shell = typ
 		}
 		if cmds, ok := legacyRunValue(sub); ok {
-			steps, err := legacyCommands(name, cmds, shell, known, warn)
+			steps, err := legacyCommands(name, cmds, shell, taskKnown, warn)
 			if err != nil {
 				return task, err
 			}
@@ -318,12 +326,21 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 	if !ok {
 		return task, nil
 	}
-	steps, err := legacyCommands(name, cmds, shell, known, warn)
+	steps, err := legacyCommands(name, cmds, shell, taskKnown, warn)
 	if err != nil {
 		return task, err
 	}
 	task.Steps = steps
 	return task, nil
+}
+
+// cloneKnownNames copies the set of names that template translation rewrites.
+func cloneKnownNames(known map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(known)+4)
+	for name, value := range known {
+		out[name] = value
+	}
+	return out
 }
 
 func legacyRunValue(value map[string]any) (any, bool) {
@@ -367,13 +384,21 @@ func legacyCommands(taskName string, raw any, shell string, known map[string]boo
 			}
 			name, _ := legacyString(value, "name")
 			run, _ := legacyStringOne(value, "run", "cmd", "cmds")
+			// A command may declare its own variables, which its own command
+			// line and environment may reference.
+			commandKnown := cloneKnownNames(known)
+			if vars, ok := legacyAnyMap(value, "vars"); ok {
+				for key := range vars {
+					commandKnown[key] = true
+				}
+			}
 			extra, err := legacyCommandExtrasOf(value, taskName, index, known, warn)
 			if err != nil {
 				return nil, err
 			}
 			taskRef, _ := legacyString(value, "task")
 			if taskRef == "" && !strings.HasPrefix(strings.TrimSpace(run), "@task:") {
-				step, err := legacyCommandStep(taskName, index, run, name, extra, commandShell, known, warn)
+				step, err := legacyCommandStep(taskName, index, run, name, extra, commandShell, commandKnown, warn)
 				if err != nil {
 					return nil, err
 				}
@@ -409,14 +434,20 @@ type legacyCommandExtras struct {
 
 func legacyCommandExtrasOf(value map[string]any, taskName string, index int, known map[string]bool, warn func(string, ...any)) (legacyCommandExtras, error) {
 	extras := legacyCommandExtras{}
+	commandKnown := cloneKnownNames(known)
+	if vars, ok := legacyAnyMap(value, "vars"); ok {
+		for key := range vars {
+			commandKnown[key] = true
+		}
+	}
 	if env, ok := legacyStringMap(value, "env"); ok {
 		extras.Env = map[string]string{}
 		for key, item := range env {
-			extras.Env[key] = translateLegacyTemplate(item, known, warn, fmt.Sprintf("task %s command #%d env.%s", taskName, index, key))
+			extras.Env[key] = translateLegacyTemplate(item, commandKnown, warn, fmt.Sprintf("task %s command #%d env.%s", taskName, index, key))
 		}
 	}
 	if dir, ok := legacyStringOne(value, "workdir", "dir"); ok {
-		extras.Dir = translateLegacyTemplate(dir, known, warn, fmt.Sprintf("task %s command #%d dir", taskName, index))
+		extras.Dir = translateLegacyTemplate(dir, commandKnown, warn, fmt.Sprintf("task %s command #%d dir", taskName, index))
 	}
 	if condition, ok := legacyString(value, "if"); ok {
 		// Conditions are expr programs over bare variable names.
@@ -442,14 +473,14 @@ func legacyCommandExtrasOf(value map[string]any, taskName string, index int, kno
 				continue
 			}
 			if kind, command, ok := legacyDynamicVar(text); ok {
-				spec, err := legacyDynamicSpec(kind, command, "", known, warn, fmt.Sprintf("task %s command #%d var %s", taskName, index, key))
+				spec, err := legacyDynamicSpec(kind, command, "", commandKnown, warn, fmt.Sprintf("task %s command #%d var %s", taskName, index, key))
 				if err != nil {
 					return extras, err
 				}
 				dynamic[key] = spec
 				continue
 			}
-			static[key] = translateLegacyTemplate(text, known, warn, fmt.Sprintf("task %s command #%d vars.%s", taskName, index, key))
+			static[key] = translateLegacyTemplate(text, commandKnown, warn, fmt.Sprintf("task %s command #%d vars.%s", taskName, index, key))
 		}
 		if len(static) > 0 {
 			extras.Vars = static
@@ -761,6 +792,14 @@ func isIdentifierStart(c byte) bool {
 
 func isIdentifierPart(c byte) bool {
 	return isIdentifierStart(c) || c >= '0' && c <= '9'
+}
+
+// SplitCommandLine splits a legacy command line into a program and its
+// arguments using shell style quoting. The library never splits an exec
+// argument itself; this helper exists for the Kite compatibility layer, which
+// maps legacy "program arg arg" strings onto structured argv.
+func SplitCommandLine(line string) (string, []string, error) {
+	return legacySplitCommandLine(line)
 }
 
 // legacySplitCommandLine splits a legacy command line into argv using shell

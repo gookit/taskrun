@@ -225,6 +225,30 @@ func TestLegacyConvertedDefinitionValidatesAndRuns(t *testing.T) {
 	}
 }
 
+// Legacy task and command variables are top level render variables, so
+// references to them must be rewritten even though they are not runtime names.
+func TestLegacyTaskVariableReferencesAreTranslated(t *testing.T) {
+	scripts := map[string]any{"t": map[string]any{
+		"vars": map[string]any{"who": "bridged"},
+		"run": []any{
+			map[string]any{
+				"name": "first",
+				"vars": map[string]any{"inner": "value"},
+				"run":  "echo ${who}-${inner}",
+				"env":  map[string]any{"KS_WHO": "${who}"},
+			},
+		},
+	}}
+	result := convertFixture(t, LegacyOptions{Scripts: scripts})
+	step := result.Definition.Tasks["t"].Steps[0]
+	if got := strings.Join(step.Exec.Args, " "); got != "${vars.who}-${vars.inner}" {
+		t.Fatalf("args=%q", got)
+	}
+	if step.Env["KS_WHO"] != "${vars.who}" {
+		t.Fatalf("env=%v", step.Env)
+	}
+}
+
 func TestLegacyNestedPathsAreTranslated(t *testing.T) {
 	scripts := map[string]any{"t": map[string]any{
 		"run": "echo $gvs.app ${paths.tmp} $time.datetime $unknown.thing",
