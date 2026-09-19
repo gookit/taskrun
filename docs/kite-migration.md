@@ -101,9 +101,22 @@ Shell 展开的 env）分别在旧 Runner 与桥接引擎上运行，并把每�
 
 ## 尚未完成
 
-- Kite 侧列表/搜索/`--show` 路径仍使用旧 Runner 解析（`Search`、`LoadScriptTaskInfo`、
-  `RawScriptTasks` 等），切换这些只读路径需要在新库上重建等价的展示模型。
 - `script_engine: kscript` 尚未在真实 Kite 配置上端到端运行验证。
+- 用户本机真实配置（`~/.kite` 全局脚本 + 项目自动发现文件）尚未用 `kscript` 引擎跑过。
+
+## 有意保留：列表、搜索与 `--show`
+
+`kite run -l`、`--search`、`--show` 仍由旧 Runner 解析（`RawScriptTasks`、
+`GlobalScriptTasks`、`ProjectScriptTasks`、`TaskNameDescs`、`Search`、
+`LoadScriptTaskInfo`、`LoadScriptFileInfo`）。理由：
+
+1. 这些路径只读，不执行命令，也不是本次抽离的风险点；它们的输出格式属于 Kite 展示层。
+2. 旧 Runner 仍加载同一份原始 `Scripts` map，因此引擎切换期间列表与实际可运行任务一致
+   （两套引擎共享同一份配置来源，转换只在运行时发生）。
+3. 迁移期保留单一解析实现，可以避免在回退点仍存在时维护两套展示模型。
+
+回退点移除时（即旧 Runner 删除、`script_engine` 开关取消）需要一并把列表/搜索迁到新库，
+所需数据为：任务名与 `Desc`、脚本文件注册表，以及全局/项目两套来源集合。
 - 旧 fixture 的运行结果逐项对照已完成（`bridge/compat_test.go` 双引擎 trace 逐字节比较）；仍未做的是在真实 Kite 配置上以 `script_engine: kscript` 端到端运行。
 
 ## 行为差异（有意修复）
