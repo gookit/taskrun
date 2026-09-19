@@ -114,6 +114,7 @@ Shell 展开的 env）分别在旧 Runner 与桥接引擎上运行，并把每�
 | `${1}`、`${2}` 带花括号的数字形式不替换（只有 `$1` 生效） | `$N` 与 `${N}` 都替换为 `${args.N}` |
 | 只有 `task: name`、没有 `run` 的命令 map 被静默忽略 | 该 map 会变成 task call（历史未生效字段转为生效，需要迁移说明） |
 | `type: cmd`/`pwsh` 在 Windows 上仍按 `-c` 调用（实际不可用） | `cmd` 用 `/D /S /C`，`pwsh`/`powershell` 用 `-NoLogo -NoProfile -NonInteractive -Command` |
+| `ScriptDirs` 脚本文件把 `BinName` 当作程序名、把文件当作第一个参数；Windows 上没有可用写法（`cmd` 不带 `/C` 会进入交互） | `Interpreter.Program` + `PrefixArgs` 结构化解释器（例如 `cmd` + `/C`），未知扩展或缺失解释器报错 |
 | 加载完成标记早于加载成功、错误可被分发路径吞掉 | 定义先校验冻结、再发布；错误分类保留 |
 | 递归任务共享并修改 `RunCtx`、包级 renderer | 每次调用独立 Vars/Env/Dir/deadline，无共享可变状态 |
 | 只有顺序递归、无环检测 | `New` 预检完整环路径与深度，运行期限制展开数 |

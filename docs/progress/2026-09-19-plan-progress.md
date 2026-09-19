@@ -71,7 +71,7 @@ go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过
 | A11 | 超时/取消清理进程树 | 覆盖（子进程树标记文件用例） |
 | A12 | 大输出、截断、writer 失败 | 覆盖 |
 | A13 | 非零退出、ignore_error、取消、未知根任务 | 覆盖 |
-| A14 | Kite 旧配置 fixture 行为对照 | 覆盖（`bridge/compat_test.go`：同一 fixture 两引擎 trace 逐字节一致 + 失败行为一致；真实 Kite 配置端到端待补） |
+| A14 | Kite 旧配置 fixture 行为对照 | 覆盖（`bridge/compat_test.go` 任务级 trace 逐字节一致 + 失败行为一致；`internal/biz/cmdbiz/scriptengine_e2e_test.go` 用真实形态配置文件 `DefineFiles` + `ScriptDirs` + `__settings` 双引擎对照一致；用户本机真实配置端到端待补） |
 | A15 | 第二真实应用 | 未完成 |
 
 ## 与计划的偏差（需评审确认）
