@@ -1,396 +1,213 @@
 package kscript
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"regexp"
-	"sort"
-	"strconv"
+	"os"
+	"strings"
 	"time"
-
-	"github.com/expr-lang/expr"
 )
 
-var ErrNotFound = errors.New("task not found")
-var ErrInvalidDefinition = errors.New("invalid kscript definition")
-var ErrDependencyCycle = errors.New("task dependency cycle")
+// Default limits applied by New unless an Option overrides them.
+const (
+	// DefaultMaxCallDepth bounds the static task call chain.
+	DefaultMaxCallDepth = 64
+	// DefaultMaxExpansions bounds the number of task calls in one run.
+	DefaultMaxExpansions = 10000
+	// DefaultKillGrace is how long a canceled process tree may exit on its own
+	// before it is killed.
+	DefaultKillGrace = 200 * time.Millisecond
+	// DefaultDynamicOutputLimit bounds the captured output of a dynamic
+	// variable command.
+	DefaultDynamicOutputLimit = 1 << 20
+)
 
+// Option configures a Runner. Options are applied before the definition is
+// validated, so an invalid engine, handler name or limit fails New.
+type Option func(*runnerConfig) error
+
+type runnerConfig struct {
+	engine        Engine
+	handlers      map[string]Handler
+	baseEnv       map[string]string
+	baseEnvSet    bool
+	maxCallDepth  int
+	maxExpansions int
+	killGrace     time.Duration
+	dynamicLimit  int64
+}
+
+// WithEngine replaces the external action backend. The backend must honor
+// cancellation and return a ProcessError or a context cause so failures can be
+// classified.
+func WithEngine(engine Engine) Option {
+	return func(c *runnerConfig) error {
+		if engine == nil {
+			return errf("WithEngine: engine is nil")
+		}
+		c.engine = engine
+		return nil
+	}
+}
+
+// WithHandler registers a host action. Handlers are immutable after New: a
+// definition that names an unregistered handler is rejected.
+func WithHandler(name string, handler Handler) Option {
+	return func(c *runnerConfig) error {
+		if name == "" {
+			return errf("WithHandler: name is required")
+		}
+		if handler == nil {
+			return errf("WithHandler: handler for %q is nil", name)
+		}
+		if c.handlers == nil {
+			c.handlers = map[string]Handler{}
+		}
+		c.handlers[name] = handler
+		return nil
+	}
+}
+
+// WithBaseEnv sets the environment baseline snapshot. The default is
+// os.Environ copied when New runs; a run never re-reads the process
+// environment and never modifies it.
+func WithBaseEnv(env map[string]string) Option {
+	return func(c *runnerConfig) error {
+		for key := range env {
+			if key == "" {
+				return errf("WithBaseEnv: empty variable name")
+			}
+		}
+		c.baseEnv = cloneStringMap(env)
+		c.baseEnvSet = true
+		return nil
+	}
+}
+
+// WithMaxCallDepth bounds the static task call chain. Zero or negative disables
+// the static check.
+func WithMaxCallDepth(depth int) Option {
+	return func(c *runnerConfig) error {
+		c.maxCallDepth = depth
+		return nil
+	}
+}
+
+// WithMaxExpansions bounds the number of task calls in one run.
+func WithMaxExpansions(limit int) Option {
+	return func(c *runnerConfig) error {
+		if limit <= 0 {
+			return errf("WithMaxExpansions: limit must be positive")
+		}
+		c.maxExpansions = limit
+		return nil
+	}
+}
+
+// WithKillGrace sets how long a canceled process tree may exit on its own
+// before the engine kills it.
+func WithKillGrace(grace time.Duration) Option {
+	return func(c *runnerConfig) error {
+		if grace < 0 {
+			return errf("WithKillGrace: grace must not be negative")
+		}
+		c.killGrace = grace
+		return nil
+	}
+}
+
+// WithDynamicOutputLimit bounds the captured output of a dynamic variable
+// command. Output above the bound fails the run instead of rendering a
+// truncated value.
+func WithDynamicOutputLimit(limit int64) Option {
+	return func(c *runnerConfig) error {
+		if limit <= 0 {
+			return errf("WithDynamicOutputLimit: limit must be positive")
+		}
+		c.dynamicLimit = limit
+		return nil
+	}
+}
+
+// Runner holds a validated definition snapshot and an immutable backend
+// configuration. One Runner may serve concurrent Runs.
 type Runner struct {
 	def Definition
 	cfg runnerConfig
 }
 
+// New validates a definition and publishes a private snapshot. Load, New,
+// Lookup, List and Inspect never execute commands; only Run produces side
+// effects through explicit actions and dynamic variables.
 func New(def Definition, opts ...Option) (*Runner, error) {
-	if def.Version == 0 {
-		def.Version = 1
+	cfg := runnerConfig{
+		handlers:      map[string]Handler{},
+		maxCallDepth:  DefaultMaxCallDepth,
+		maxExpansions: DefaultMaxExpansions,
+		killGrace:     DefaultKillGrace,
+		dynamicLimit:  DefaultDynamicOutputLimit,
 	}
-	if def.Version != 1 {
-		return nil, fmt.Errorf("%w: unsupported version %d", ErrInvalidDefinition, def.Version)
-	}
-	if def.BaseDir == "" {
-		return nil, fmt.Errorf("%w: BaseDir is required", ErrInvalidDefinition)
-	}
-	c := runnerConfig{handlers: map[string]Handler{}}
-	for _, o := range opts {
-		if err := o(&c); err != nil {
-			return nil, err
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(&cfg); err != nil {
+			return nil, &RunError{Kind: ErrKindInvalidDefinition, Err: err}
 		}
 	}
-	if c.engine == nil {
-		c.engine = ProcessEngine{}
+	if cfg.engine == nil {
+		cfg.engine = ProcessEngine{grace: cfg.killGrace}
 	}
-	if err := validateDefinition(def, c); err != nil {
+	prepared, err := prepareDefinition(def, cfg)
+	if err != nil {
 		return nil, err
 	}
-	return &Runner{def: cloneDefinition(def), cfg: c}, nil
-}
-func (r *Runner) Lookup(name string) (Task, error) {
-	t, ok := r.def.Tasks[name]
-	if !ok {
-		return Task{}, fmt.Errorf("%w: %s", ErrNotFound, name)
+	if !cfg.baseEnvSet {
+		cfg.baseEnv = envFromList(os.Environ())
 	}
-	return cloneTask(t), nil
+	handlers := make(map[string]Handler, len(cfg.handlers))
+	for name, handler := range cfg.handlers {
+		handlers[name] = handler
+	}
+	cfg.handlers = handlers
+	return &Runner{def: prepared, cfg: cfg}, nil
 }
+
+// Lookup returns an exact-name copy of a task. The returned value shares no
+// mutable state with the Runner.
+func (r *Runner) Lookup(name string) (Task, error) {
+	task, ok := r.def.Tasks[name]
+	if !ok {
+		// A missing dependency is a definition error; only a root lookup by
+		// name reports ErrNotFound.
+		return Task{}, &RunError{Kind: ErrKindNotFound, Task: name, Err: ErrNotFound}
+	}
+	return cloneTask(task), nil
+}
+
+// List returns every task sorted by name. Each entry is a copy.
 func (r *Runner) List() []Task {
 	names := make([]string, 0, len(r.def.Tasks))
 	for name := range r.def.Tasks {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	sortStrings(names)
 	out := make([]Task, 0, len(names))
 	for _, name := range names {
 		out = append(out, cloneTask(r.def.Tasks[name]))
 	}
 	return out
 }
-func (r *Runner) Inspect(ctx context.Context, req Request) (Plan, error) {
-	if err := ctx.Err(); err != nil {
-		return Plan{}, err
-	}
-	t, err := r.Lookup(req.Task)
-	if err != nil {
-		return Plan{}, err
-	}
-	p := Plan{Task: req.Task}
-	var walk func(Task) error
-	walk = func(task Task) error {
-		if task.If != "" {
-			p.Deferred = append(p.Deferred, "task condition: "+task.Name+": "+task.If)
-		}
-		for _, dep := range task.Deps {
-			dt, err := r.Lookup(dep)
-			if err != nil {
-				return err
-			}
-			if err := walk(dt); err != nil {
-				return err
-			}
-		}
-		for _, step := range task.Steps {
-			if step.If != "" {
-				p.Deferred = append(p.Deferred, "step condition: "+step.Name+": "+step.If)
-			}
-			kind := ""
-			program := ""
-			args := []string{}
-			if step.Exec != nil {
-				kind = "exec"
-				program = step.Exec.Program
-				args = step.Exec.Args
-			}
-			if step.Shell != nil {
-				kind = "shell"
-				program = step.Shell.Name
-			}
-			if step.File != nil {
-				kind = "file"
-				program = step.File.Interpreter.Program
-				args = append(step.File.Interpreter.PrefixArgs, step.File.Path)
-			}
-			if step.Task != nil {
-				ct, err := r.Lookup(step.Task.Name)
-				if err != nil {
-					return err
-				}
-				if err := walk(ct); err != nil {
-					return err
-				}
-				continue
-			}
-			p.Actions = append(p.Actions, PlannedAction{Task: task.Name, Step: step.Name, Kind: kind, Program: program, Args: args, Dir: req.Dir})
-		}
-		return nil
-	}
-	if err := walk(t); err != nil {
-		return Plan{}, err
-	}
-	return p, nil
-}
-func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	t, err := r.Lookup(req.Task)
-	if err != nil {
-		return nil, err
-	}
-	if req.DryRun {
-		p, err := r.Inspect(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return &Result{Status: StatusDryRun, Task: t.Name, Plan: &p}, nil
-	}
-	if ok, err := evalCondition(t.If, req.Vars); err != nil {
-		return nil, err
-	} else if !ok {
-		return &Result{Status: StatusSkipped, Task: t.Name}, nil
-	}
-	if len(t.Steps) == 0 && len(t.Deps) == 0 {
-		return nil, fmt.Errorf("%w: empty task %s", ErrInvalidDefinition, t.Name)
-	}
-	result := &Result{Status: StatusSucceeded, Task: t.Name}
-	if err := r.runTask(ctx, t, req, result, map[string]bool{}); err != nil {
-		if errors.Is(err, context.Canceled) {
-			result.Status = StatusCanceled
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			result.Status = StatusTimedOut
-		}
-		return result, err
-	}
-	return result, nil
-}
 
-func (r *Runner) runTask(ctx context.Context, t Task, req Request, result *Result, stack map[string]bool) error {
-	if t.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(t.Timeout))
-		defer cancel()
-	}
-	if stack[t.Name] {
-		return fmt.Errorf("%w: %s", ErrDependencyCycle, t.Name)
-	}
-	stack[t.Name] = true
-	defer delete(stack, t.Name)
-	if t.Dir != "" {
-		req.Dir = t.Dir
-	}
-	if req.Vars == nil {
-		req.Vars = map[string]any{}
-	}
-	if len(t.Vars) > 0 {
-		m := map[string]any{}
-		for k, v := range req.Vars {
-			m[k] = v
-		}
-		for k, v := range t.Vars {
-			m[k] = v
-		}
-		req.Vars = m
-	}
-	if len(t.Env) > 0 {
-		if req.Env == nil {
-			req.Env = map[string]string{}
-		}
-		merged := map[string]string{}
-		for k, v := range req.Env {
-			merged[k] = v
-		}
-		for k, v := range t.Env {
-			merged[k] = v
-		}
-		req.Env = merged
-	}
-	if ok, err := evalCondition(t.If, req.Vars); err != nil {
-		return err
-	} else if !ok {
-		return nil
-	}
-	for _, dep := range t.Deps {
-		dt, err := r.Lookup(dep)
-		if err != nil {
-			return err
-		}
-		if err := r.runTask(ctx, dt, req, result, stack); err != nil {
-			return err
-		}
-	}
-	for _, step := range t.Steps {
-		stepDir := req.Dir
-		if step.Dir != "" {
-			stepDir = step.Dir
-		}
-		stepVars := req.Vars
-		if len(step.Vars) > 0 {
-			m := map[string]any{}
-			for k, v := range req.Vars {
-				m[k] = v
-			}
-			for k, v := range step.Vars {
-				m[k] = v
-			}
-			stepVars = m
-		}
-		stepEnv := req.Env
-		if len(step.Env) > 0 {
-			m := map[string]string{}
-			for k, v := range req.Env {
-				m[k] = v
-			}
-			for k, v := range step.Env {
-				m[k] = v
-			}
-			stepEnv = m
-		}
-		stepCtx := ctx
-		if step.Timeout > 0 {
-			var cancel context.CancelFunc
-			stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout))
-			defer cancel()
-		}
-		if step.If != "" {
-			ok, err := evalCondition(step.If, stepVars)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSkipped})
-				continue
-			}
-		}
-		if step.Task != nil {
-			ct, err := r.Lookup(step.Task.Name)
-			if err != nil {
-				return err
-			}
-			childReq := req
-			childReq.Dir = stepDir
-			childReq.Vars = stepVars
-			childReq.Env = stepEnv
-			if err := r.runTask(ctx, ct, childReq, result, stack); err != nil {
-				return err
-			}
-		} else if step.Host != nil {
-			h := r.cfg.handlers[step.Host.Name]
-			ar, err := h(stepCtx, HostCall{Name: step.Host.Name, Args: step.Host.Args, Vars: stepVars, Env: stepEnv, Dir: stepDir})
-			if err != nil {
-				return err
-			}
-			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output, ErrorOutput: ar.ErrorOutput})
-		} else {
-			action := PreparedAction{Dir: stepDir, Env: stepEnv}
-			if step.Exec != nil {
-				action.Kind = "exec"
-				action.Program = render(step.Exec.Program, stepVars, req)
-				action.Args = make([]string, len(step.Exec.Args))
-				for i, v := range step.Exec.Args {
-					action.Args[i] = render(v, stepVars, req)
-				}
-			}
-			if step.Shell != nil {
-				action.Kind = "shell"
-				action.Program = step.Shell.Name
-				action.Script = step.Shell.Script
-			}
-			if step.File != nil {
-				action.Kind = "file"
-				action.Program = step.File.Interpreter.Program
-				action.Args = append(append([]string{}, step.File.Interpreter.PrefixArgs...), step.File.Path)
-			}
-			if action.Program == "" {
-				return fmt.Errorf("%w: step %s has no action", ErrInvalidDefinition, step.Name)
-			}
-			ar, err := r.cfg.engine.Execute(stepCtx, action, req.IO)
-			if err != nil {
-				if step.IgnoreError {
-					result.Status = StatusSucceededWithWarnings
-					result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceededWithWarnings, Err: err})
-					continue
-				}
-				return err
-			}
-			result.Steps = append(result.Steps, StepResult{Name: step.Name, Status: StatusSucceeded, ExitCode: ar.ExitCode, Output: ar.Output})
-		}
-	}
-	return nil
-}
+// Source returns the definition provenance recorded by the loader, if any.
+func (r *Runner) Source() []Source { return append([]Source(nil), r.def.Sources...) }
 
-func evalCondition(source string, vars map[string]any) (bool, error) {
-	if source == "" {
-		return true, nil
+func envFromList(list []string) map[string]string {
+	out := make(map[string]string, len(list))
+	for _, item := range list {
+		index := strings.Index(item, "=")
+		if index <= 0 {
+			continue
+		}
+		out[item[:index]] = item[index+1:]
 	}
-	program, err := expr.Compile(source, expr.Env(vars))
-	if err != nil {
-		return false, fmt.Errorf("invalid condition: %w", err)
-	}
-	value, err := expr.Run(program, vars)
-	if err != nil {
-		return false, fmt.Errorf("condition evaluation failed: %w", err)
-	}
-	ok, isBool := value.(bool)
-	if !isBool {
-		return false, fmt.Errorf("condition must return bool, got %T", value)
-	}
-	return ok, nil
+	return out
 }
-
-var variablePattern = regexp.MustCompile(`\$\{(vars|env|args)\.([^}]+)\}`)
-
-func render(value string, vars map[string]any, req Request) string {
-	return variablePattern.ReplaceAllStringFunc(value, func(token string) string {
-		parts := variablePattern.FindStringSubmatch(token)
-		if len(parts) != 3 {
-			return token
-		}
-		switch parts[1] {
-		case "vars":
-			if v, ok := vars[parts[2]]; ok {
-				return fmt.Sprint(v)
-			}
-		case "env":
-			if v, ok := req.Env[parts[2]]; ok {
-				return v
-			}
-		case "args":
-			if i, err := strconv.Atoi(parts[2]); err == nil && i > 0 && i <= len(req.Args) {
-				return req.Args[i-1]
-			}
-		}
-		return token
-	})
-}
-
-func validateDefinition(d Definition, c runnerConfig) error {
-	for n, t := range d.Tasks {
-		if n == "" || t.Name != "" && t.Name != n {
-			return fmt.Errorf("%w: task name %s", ErrInvalidDefinition, n)
-		}
-		for _, dep := range t.Deps {
-			if _, ok := d.Tasks[dep]; !ok {
-				return fmt.Errorf("%w: task %s depends on %s", ErrInvalidDefinition, n, dep)
-			}
-		}
-		for _, s := range t.Steps {
-			if s.Task != nil {
-				if _, ok := d.Tasks[s.Task.Name]; !ok {
-					return fmt.Errorf("%w: task call %s", ErrInvalidDefinition, s.Task.Name)
-				}
-			}
-			if s.Host != nil {
-				if _, ok := c.handlers[s.Host.Name]; !ok {
-					return fmt.Errorf("%w: host %s", ErrInvalidDefinition, s.Host.Name)
-				}
-			}
-		}
-	}
-	for name, file := range d.Files {
-		if name == "" || file.Path == "" || file.Interpreter.Program == "" {
-			return fmt.Errorf("%w: invalid script file %s", ErrInvalidDefinition, name)
-		}
-	}
-	return nil
-}
-func cloneDefinition(d Definition) Definition { return d }
-func cloneTask(t Task) Task                   { return t }
