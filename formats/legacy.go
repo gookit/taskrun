@@ -29,6 +29,11 @@ type LegacyOptions struct {
 	// Only these names are rewritten from legacy $name/${name} into the
 	// namespaced ${vars.name} form; anything else is left untouched.
 	RuntimeVars []string
+	// EnvNames lists environment variable names that the legacy renderer
+	// substituted through its ParseEnv option. A bare $NAME reference to one of
+	// them becomes ${env.NAME}. Variable names take precedence, matching the
+	// legacy lookup order.
+	EnvNames []string
 	// Files are script files discovered from ScriptDirs.
 	Files map[string]LegacyScriptFile
 }
@@ -141,6 +146,13 @@ func legacyKnownNames(def kscript.Definition, opts LegacyOptions) map[string]boo
 	}
 	for _, name := range opts.RuntimeVars {
 		known[name] = true
+	}
+	// Environment names are recorded with an "env:" prefix so template
+	// translation can tell them apart from variables.
+	for _, name := range opts.EnvNames {
+		if name != "" {
+			known["env:"+name] = true
+		}
 	}
 	// Legacy built-in render variables.
 	for _, name := range []string{"workdir", "dirname", "cur_dir", "time", "gvs", "paths", "kite", "@", "*"} {
@@ -722,9 +734,15 @@ func translateLegacyTemplate(text string, known map[string]bool, warn func(strin
 		if isIdentifierStart(next) {
 			j := legacyPathEnd(text, i+1)
 			name := text[i+1 : j]
-			if known[topSegment(name)] {
+			switch {
+			case known[name]:
 				b.WriteString("${vars." + name + "}")
-			} else {
+			case known[topSegment(name)]:
+				b.WriteString("${vars." + name + "}")
+			case known["env:"+name]:
+				// Legacy ParseEnv substituted environment values at render time.
+				b.WriteString("${env." + name + "}")
+			default:
 				b.WriteString(text[i:j])
 			}
 			i = j
@@ -748,6 +766,8 @@ func translateLegacyName(inner string, known map[string]bool) string {
 		return "${args." + inner + "}"
 	case known[topSegment(inner)]:
 		return "${vars." + inner + "}"
+	case known["env:"+inner]:
+		return "${env." + inner + "}"
 	default:
 		return "${" + inner + "}"
 	}

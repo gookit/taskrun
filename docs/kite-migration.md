@@ -90,6 +90,12 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/
 结果：全部通过。`pkg/quickjump`（既有断言差异）与 `pkg/simpleai`（既有 vet 报错，
 `fmt.Println` 多余换行、非常量格式串）在本次改动前即失败，与迁移无关。
 
+旧 fixture 双引擎对照：`pkg/kscript/bridge/compat_test.go`
+用同一份旧配置（`__settings`、deps、任务变量、命令变量、`@task:` 引用、`$1`/`$2`、
+Shell 展开的 env）分别在旧 Runner 与桥接引擎上运行，并把每条命令的可观察结果写入
+`trace.txt` 后逐字节比较，结果一致；失败行为（命令非零退出）在两侧都返回错误。
+对照过程中确认了三处旧实现的真实行为，已按“有意修复/需迁移说明”记录在下表。
+
 已修复的既有缺陷：`ScriptTask.resolveIfExpr` 对空条件直接 `expr.Compile("")` 会 panic；
 现在空条件返回 true。设计明确新实现不保留 panic，该测试此前一直 panic 失败。
 
@@ -97,15 +103,17 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/
 
 - Kite 侧列表/搜索/`--show` 路径仍使用旧 Runner 解析（`Search`、`LoadScriptTaskInfo`、
   `RawScriptTasks` 等），切换这些只读路径需要在新库上重建等价的展示模型。
-- 旧 fixture 的运行结果逐项对照（同一配置分别用两个引擎运行并比较输出）尚未落地；
-  当前只有转换等价性与单任务执行证据。
 - `script_engine: kscript` 尚未在真实 Kite 配置上端到端运行验证。
+- 旧 fixture 的运行结果逐项对照已完成（`bridge/compat_test.go` 双引擎 trace 逐字节比较）；仍未做的是在真实 Kite 配置上以 `script_engine: kscript` 端到端运行。
 
 ## 行为差异（有意修复）
 
 | 旧行为 | 新行为 |
 |---|---|
 | `resolveIfExpr` panic、打印并固定返回 true | 条件必须返回 bool；错误可分类，任务/步骤跳过可观察 |
+| `${1}`、`${2}` 带花括号的数字形式不替换（只有 `$1` 生效） | `$N` 与 `${N}` 都替换为 `${args.N}` |
+| 只有 `task: name`、没有 `run` 的命令 map 被静默忽略 | 该 map 会变成 task call（历史未生效字段转为生效，需要迁移说明） |
+| `type: cmd`/`pwsh` 在 Windows 上仍按 `-c` 调用（实际不可用） | `cmd` 用 `/D /S /C`，`pwsh`/`powershell` 用 `-NoLogo -NoProfile -NonInteractive -Command` |
 | 加载完成标记早于加载成功、错误可被分发路径吞掉 | 定义先校验冻结、再发布；错误分类保留 |
 | 递归任务共享并修改 `RunCtx`、包级 renderer | 每次调用独立 Vars/Env/Dir/deadline，无共享可变状态 |
 | 只有顺序递归、无环检测 | `New` 预检完整环路径与深度，运行期限制展开数 |

@@ -269,6 +269,30 @@ func TestLegacyNestedPathsAreTranslated(t *testing.T) {
 	}
 }
 
+// The legacy ParseEnv option substituted environment values for bare $NAME
+// references; converted templates use the env namespace instead. Variables keep
+// precedence, matching the legacy lookup order.
+func TestLegacyParseEnvNamesAreTranslated(t *testing.T) {
+	scripts := map[string]any{"t": map[string]any{
+		"vars": map[string]any{"KS_PROJECT": "variable-wins"},
+		"run":  "echo $KS_PROJECT ${vars.project} $HOME $UNKNOWN",
+	}}
+	result := convertFixture(t, LegacyOptions{
+		Scripts:  scripts,
+		EnvNames: []string{"KS_PROJECT", "HOME"},
+	})
+	args := result.Definition.Tasks["t"].Steps[0].Exec.Args
+	want := []string{"${vars.KS_PROJECT}", "${vars.project}", "${env.HOME}", "$UNKNOWN"}
+	if len(args) != len(want) {
+		t.Fatalf("args=%v want=%v", args, want)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args=%v want=%v", args, want)
+		}
+	}
+}
+
 func hasWarning(warnings []string, needle string) bool {
 	for _, warning := range warnings {
 		if strings.Contains(warning, needle) {

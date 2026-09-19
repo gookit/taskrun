@@ -29,7 +29,7 @@
 | T06 进程/Shell/file/host 引擎 | 基本完成 | `process_engine.go`；显式 Shell 选择、argv 不二次分词、file 走注册表解释器、dry-run 零副作用、错误分类 |
 | T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object、宽限期、能力不可用即失败、`Canceled`/`TimedOut` 分类 |
 | T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
-| T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器 + `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；卡在：列表/搜索路径、旧 fixture 运行对照、真实配置端到端 |
+| T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器（含 ParseEnv 的 `${env.*}` 重写）+ `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；旧 fixture 双引擎对照已通过；卡在：列表/搜索路径、真实配置端到端 |
 | T10 第二应用与 Go 版本矩阵 | 未完成 | CI matrix 定义存在但未运行；第二真实应用未确认，`tmp/kscript-consumer` 使用 `replace`，不构成可复用验收 |
 | T11 文档、版本与发布准备 | 部分 | README/中文 README/kite-migration/CHANGELOG 完成；缺版本号、LICENSE 复核与发布候选审查 |
 
@@ -71,7 +71,7 @@ go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过
 | A11 | 超时/取消清理进程树 | 覆盖（子进程树标记文件用例） |
 | A12 | 大输出、截断、writer 失败 | 覆盖 |
 | A13 | 非零退出、ignore_error、取消、未知根任务 | 覆盖 |
-| A14 | Kite 旧配置 fixture 行为对照 | 部分（转换等价性与桥接单任务执行有测试；两引擎运行结果逐项对照未做） |
+| A14 | Kite 旧配置 fixture 行为对照 | 覆盖（`bridge/compat_test.go`：同一 fixture 两引擎 trace 逐字节一致 + 失败行为一致；真实 Kite 配置端到端待补） |
 | A15 | 第二真实应用 | 未完成 |
 
 ## 与计划的偏差（需评审确认）
