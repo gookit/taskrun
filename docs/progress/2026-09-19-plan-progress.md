@@ -28,10 +28,10 @@
 | T05 顺序图与运行状态 | 完成 | `graph.go`、`runner.go`；`New` 全图预检（环路径/深度）、运行期展开上限、每次调用独立 Vars/Env/Dir/deadline、`TaskResult` 记录跳过原因 |
 | T06 进程/Shell/file/host 引擎 | 基本完成 | `process_engine.go`；显式 Shell 选择、argv 不二次分词、file 走注册表解释器、dry-run 零副作用、错误分类 |
 | T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object、宽限期、能力不可用即失败、`Canceled`/`TimedOut` 分类 |
-| T08 Runner/Inspect/示例/README | 部分 | Runner/Inspect/README/中文 README 与 CLI consumer 完成；缺 `examples/basic/main.go`、`examples/config/main.go`、`examples/host` |
+| T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
 | T09 Kite 迁移 | 部分 | `formats/legacy.go` 转换器与 `docs/kite-migration.md` 完成；Kite 侧调用方尚未切换到新库，旧 fixture 前后对照未做 |
 | T10 第二应用与 Go 版本矩阵 | 未完成 | CI matrix 定义存在但未运行；第二真实应用未确认，`tmp/kscript-consumer` 使用 `replace`，不构成可复用验收 |
-| T11 文档、版本与发布准备 | 部分 | README/中文 README/kite-migration 完成；缺 `CHANGELOG.md`、版本号与发布候选审查 |
+| T11 文档、版本与发布准备 | 部分 | README/中文 README/kite-migration/CHANGELOG 完成；缺版本号、LICENSE 复核与发布候选审查 |
 
 ## 验证命令与结果（2026-09-19）
 
@@ -63,8 +63,8 @@ go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run # 通过
 | A03 | 缺失 deps、混合环、展开超限 | 覆盖（`TestCycleIsRejectedAtNewWithPath`、`TestExpansionLimitAtRuntime`） |
 | A04 | 菱形依赖与重复调用 | 覆盖（`TestDiamondDependencyRunsTwice`） |
 | A05 | 条件 true/false/空/类型错误/平台 | 覆盖 |
-| A06 | 参数空格、引号、空串、Windows 路径 | 部分（exec argv 保留边界有测试；引号与空串用例待补） |
-| A07 | go run / sh / cmd / pwsh 解释器 | 部分（sh/bash/cmd 有测试；pwsh 与 go run 文件动作缺平台测试） |
+| A06 | 参数空格、引号、空串、Windows 路径 | 覆盖（`TestExecKeepsArgumentBoundaries` 逐字节校验 argv） |
+| A07 | go run / sh / cmd / pwsh 解释器 | 基本覆盖（`file` 动作走 `go run`、`sh`/`bash`/`cmd` 与 prefix_args 有测试；pwsh 依赖 runner 是否安装） |
 | A08 | vars/env 优先级、CleanEnv、PATH、动态变量 | 覆盖 |
 | A09 | dry-run 零副作用与 Deferred | 覆盖 |
 | A10 | 并发 Run 隔离 | 覆盖（并发用例通过；race 检测受限） |
