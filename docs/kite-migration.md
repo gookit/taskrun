@@ -96,13 +96,20 @@ Shell 展开的 env）分别在旧 Runner 与桥接引擎上运行，并把每�
 `trace.txt` 后逐字节比较，结果一致；失败行为（命令非零退出）在两侧都返回错误。
 对照过程中确认了三处旧实现的真实行为，已按“有意修复/需迁移说明”记录在下表。
 
+仓库真实配置验证：`pkg/kscript/bridge/repository_config_test.go` 直接加载本仓库随附的
+`config/module/scripts.yml`（以及可选的 `scripts.$os.yml`，`$base`/`$config` 别名按 boot
+的方式解析），执行转换、`New` 校验与逐任务 `Inspect`：8 个任务全部通过、0 条转换 warning。
+该测试不执行任何任务；用真实配置实际执行仍需在你自己机器上触发。
+
 已修复的既有缺陷：`ScriptTask.resolveIfExpr` 对空条件直接 `expr.Compile("")` 会 panic；
 现在空条件返回 true。设计明确新实现不保留 panic，该测试此前一直 panic 失败。
 
 ## 尚未完成
 
-- `script_engine: kscript` 尚未在真实 Kite 配置上端到端运行验证。
-- 用户本机真实配置（`~/.kite` 全局脚本 + 项目自动发现文件）尚未用 `kscript` 引擎跑过。
+- `script_engine: kscript` 尚未在真实配置上**实际执行**过任务（转换、校验、规划已验证；
+  执行会产生副作用，需由使用者自行触发）。
+- 项目级自动发现文件（`AutoTaskFiles`）与 `~/.kite` 用户目录配置：本机不存在该目录，
+  发现逻辑本身仍由旧 Runner 负责，因此不在本次转换范围内。
 
 ## 有意保留：列表、搜索与 `--show`
 
