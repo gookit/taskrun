@@ -39,6 +39,11 @@ type varScope struct {
 	step   string
 	dir    string
 	env    map[string]string
+	// taskEnv is the rendered task level environment, kept so a step scope can
+	// rebuild the final environment without re-rendering the task level.
+	taskEnv map[string]string
+	// paths lists the EnvPaths directories already prepended to PATH.
+	paths  []string
 	args   []string
 	run    map[string]any
 	vars   map[string]any
@@ -109,13 +114,17 @@ type runState struct {
 	req     Request
 	host    map[string]any
 	defVars map[string]any
-	baseDir string
-	callSeq int
-	calls   int
-	ignored bool
-	skipped bool
-	result  *Result
-	plan    *Plan
+	// defEnv holds only the rendered definition level Env values; the base
+	// environment is merged later so CleanEnv can still drop it.
+	defEnv      map[string]string
+	defEnvPaths []string
+	baseDir     string
+	callSeq     int
+	calls       int
+	ignored     bool
+	skipped     bool
+	result      *Result
+	plan        *Plan
 }
 
 func newRunState(ctx context.Context, r *Runner, req Request, mode executionMode) (*runState, error) {
@@ -136,9 +145,8 @@ func newRunState(ctx context.Context, r *Runner, req Request, mode executionMode
 	if req.Dir != "" {
 		s.baseDir = resolveDir(r.def.BaseDir, req.Dir)
 	}
-	defEnv := s.envFor(Task{}, nil)
 	baseView := renderVars{
-		Env:  defEnv,
+		Env:  s.r.cfg.baseEnv,
 		Args: req.Args,
 		Host: s.host,
 		Run:  s.runMeta("", "", s.baseDir),
@@ -148,6 +156,20 @@ func newRunState(ctx context.Context, r *Runner, req Request, mode executionMode
 		return nil, err
 	}
 	s.defVars = mergeDataMaps(vars, req.Vars)
+	// Environment values may reference variables, so they are rendered once the
+	// definition variables are known.
+	view := baseView
+	view.Vars = s.defVars
+	renderedEnv, err := s.renderEnvMap(r.def.Env, view)
+	if err != nil {
+		return nil, err
+	}
+	s.defEnv = renderedEnv
+	renderedPaths, err := s.renderPaths(r.def.EnvPaths, view)
+	if err != nil {
+		return nil, err
+	}
+	s.defEnvPaths = renderedPaths
 	if mode == modeInspect {
 		s.plan = &Plan{Task: req.Task}
 	}
@@ -169,26 +191,27 @@ func (s *runState) nextCallID(name string) string {
 	return fmt.Sprintf("%s#%d", name, s.callSeq)
 }
 
-// envFor composes the effective environment: Runner base environment,
-// definition defaults, task values, step values and finally the Request. A
-// task with CleanEnv drops only the base environment.
-func (s *runState) envFor(task Task, step *Step) map[string]string {
+// visibleEnv returns the environment visible for rendering at a given level:
+// the base snapshot plus the definition defaults, or only the definition
+// defaults for a task with CleanEnv.
+func (s *runState) visibleEnv(cleanEnv bool) map[string]string {
+	if cleanEnv {
+		return cloneStringMap(s.defEnv)
+	}
+	return mergeStringMaps(s.r.cfg.baseEnv, s.defEnv)
+}
+
+// composeEnv merges the effective environment in priority order (base,
+// definition, task, step, Request) and replaces PATH with the EnvPaths
+// directories in front of the inherited value. A task with CleanEnv drops only
+// the base environment snapshot.
+func (s *runState) composeEnv(cleanEnv bool, taskEnv, stepEnv, reqEnv map[string]string, paths []string) map[string]string {
 	parts := []map[string]string{}
-	if !task.CleanEnv {
+	if !cleanEnv {
 		parts = append(parts, s.r.cfg.baseEnv)
 	}
-	parts = append(parts, s.r.def.Env, task.Env)
-	if step != nil {
-		parts = append(parts, step.Env)
-	}
-	parts = append(parts, s.req.Env)
+	parts = append(parts, s.defEnv, taskEnv, stepEnv, reqEnv)
 	out := mergeStringMaps(parts...)
-	paths := []string{}
-	if step != nil {
-		paths = append(paths, step.EnvPaths...)
-	}
-	paths = append(paths, task.EnvPaths...)
-	paths = append(paths, s.r.def.EnvPaths...)
 	if len(paths) > 0 {
 		existing, _ := lookupEnv(out, "PATH")
 		for key := range out {
@@ -203,6 +226,93 @@ func (s *runState) envFor(task Task, step *Step) map[string]string {
 		out["PATH"] = joined
 	}
 	return out
+}
+
+// envView builds the read view used to render Env values and EnvPaths at one
+// level. Dynamic variables must never decide the process environment, so a
+// dynamic reference is an error while running and a deferred field while
+// inspecting.
+func (s *runState) envView(call *callState, dir string, vars map[string]any, visible map[string]string, dyn map[string]DynamicVar) renderVars {
+	view := renderVars{
+		Vars: vars,
+		Env:  visible,
+		Args: call.args,
+		Host: s.host,
+		Run:  s.runMeta(call.task.Name, call.id, dir),
+	}
+	if len(dyn) == 0 {
+		return view
+	}
+	names := make([]string, 0, len(dyn))
+	for name := range dyn {
+		names = append(names, name)
+	}
+	sortStrings(names)
+	view.DeferredNames = names
+	view.Dynamic = func(name string) (any, bool, error) {
+		if _, declared := dyn[name]; !declared {
+			return nil, false, nil
+		}
+		if s.mode == modeInspect {
+			return nil, false, errDeferred
+		}
+		return nil, false, invalidDef("environment values must not depend on the dynamic variable %q: dynamic variables cannot decide the process environment", name)
+	}
+	return view
+}
+
+func (s *runState) renderEnvMap(env map[string]string, view renderVars) (map[string]string, error) {
+	if len(env) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(env))
+	for _, key := range sortedKeys(env) {
+		value, err := renderTemplate(env[key], view)
+		if err != nil {
+			if errors.Is(err, errDeferred) && s.mode == modeInspect {
+				s.deferPlan("environment %s depends on a dynamic variable", key)
+				out[key] = env[key]
+				continue
+			}
+			return nil, err
+		}
+		out[key] = value
+	}
+	return out, nil
+}
+
+func (s *runState) renderPaths(list []string, view renderVars) ([]string, error) {
+	if len(list) == 0 {
+		return nil, nil
+	}
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		rendered, err := renderTemplate(item, view)
+		if err != nil {
+			if errors.Is(err, errDeferred) && s.mode == modeInspect {
+				s.deferPlan("env_paths entry depends on a dynamic variable")
+				out = append(out, item)
+				continue
+			}
+			return nil, err
+		}
+		out = append(out, rendered)
+	}
+	return out, nil
+}
+
+// resolveLevelVars resolves one variable level. While inspecting, a level that
+// depends on a dynamic variable is reported as deferred instead of failing.
+func (s *runState) resolveLevelVars(where string, level map[string]any, view renderVars) (map[string]any, error) {
+	vars, err := resolveVarLevel(level, view)
+	if err != nil {
+		if errors.Is(err, errDeferred) && s.mode == modeInspect {
+			s.deferPlan("%s variables depend on a dynamic variable", where)
+			return nil, nil
+		}
+		return nil, err
+	}
+	return vars, nil
 }
 
 // Run executes the requested task in an isolated state. A returned error is
@@ -297,15 +407,9 @@ func (s *runState) runTask(parent context.Context, call *callState) error {
 	ctx, cancel := withBudget(parent, task.Timeout)
 	defer cancel()
 	call.dir = resolveDir(call.dir, task.Dir)
-	scope := s.newScope(ctx, call, nil)
-
-	vars, err := resolveVarLevel(task.Vars, scope.renderVars())
+	scope, err := s.newTaskScope(ctx, call)
 	if err != nil {
 		return s.fail(err, call, "")
-	}
-	scope.vars = mergeDataMaps(s.defVars, vars)
-	if task.CleanEnv {
-		scope.env = s.envFor(task, nil)
 	}
 
 	evaluator, err := compileCondition(task.If, scope.renderVars())
@@ -362,54 +466,112 @@ func (s *runState) childCall(parent *callState, name string, args []string) (*ca
 	}, nil
 }
 
-func (s *runState) newScope(ctx context.Context, call *callState, step *Step) *varScope {
+// newTaskScope resolves the variables, environment and EnvPaths of one task
+// call. Variables are resolved before the environment, because environment
+// values may reference them, and the environment is visible to conditions and
+// actions but never to the variables of the same level.
+func (s *runState) newTaskScope(ctx context.Context, call *callState) (*varScope, error) {
 	task := call.task
-	env := s.envFor(task, step)
 	dir := call.dir
-	name := ""
-	if step != nil {
-		name = stepLabel(*step, 0)
-		dir = resolveDir(call.dir, step.Dir)
-	}
+	visible := s.visibleEnv(task.CleanEnv)
 	scope := &varScope{
 		s:      s,
 		ctx:    ctx,
 		task:   task.Name,
 		callID: call.id,
-		step:   name,
 		dir:    dir,
-		env:    env,
 		args:   call.args,
 		run:    s.runMeta(task.Name, call.id, dir),
 		vars:   mergeDataMaps(s.defVars),
 		dyn:    task.DynamicVars,
+		env:    visible,
 	}
-	if step != nil {
-		scope.dyn = step.DynamicVars
+	varsView := scope.renderVars()
+	varsView.Env = visible
+	vars, err := s.resolveLevelVars("task "+task.Name, task.Vars, varsView)
+	if err != nil {
+		return nil, err
 	}
-	return scope
+	scope.vars = mergeDataMaps(s.defVars, vars)
+	envView := s.envView(call, dir, scope.vars, visible, scope.dyn)
+	taskEnv, err := s.renderEnvMap(task.Env, envView)
+	if err != nil {
+		return nil, err
+	}
+	taskPaths, err := s.renderPaths(task.EnvPaths, envView)
+	if err != nil {
+		return nil, err
+	}
+	// The Request environment applies to the whole run, so it is visible to the
+	// task condition as well as to the steps.
+	requestEnv, err := s.renderEnvMap(s.req.Env, envView)
+	if err != nil {
+		return nil, err
+	}
+	scope.taskEnv = taskEnv
+	scope.paths = append(taskPaths, s.defEnvPaths...)
+	scope.env = s.composeEnv(task.CleanEnv, taskEnv, nil, requestEnv, scope.paths)
+	return scope, nil
+}
+
+// newStepScope resolves the variables, environment and EnvPaths of one step on
+// top of its task scope and adds the Request environment, which has the highest
+// priority.
+func (s *runState) newStepScope(ctx context.Context, call *callState, taskScope *varScope, index int, step Step) (*varScope, error) {
+	dir := resolveDir(call.dir, step.Dir)
+	scope := &varScope{
+		s:      s,
+		ctx:    ctx,
+		task:   call.task.Name,
+		callID: call.id,
+		step:   stepLabel(step, index),
+		dir:    dir,
+		args:   call.args,
+		run:    s.runMeta(call.task.Name, call.id, dir),
+		vars:   taskScope.vars,
+		dyn:    mergeDynamicVars(taskScope.dyn, step.DynamicVars),
+		env:    taskScope.env,
+	}
+	varsView := scope.renderVars()
+	varsView.Env = taskScope.env
+	vars, err := s.resolveLevelVars("step "+scope.step, step.Vars, varsView)
+	if err != nil {
+		return nil, err
+	}
+	scope.vars = mergeDataMaps(taskScope.vars, vars)
+	envView := s.envView(call, dir, scope.vars, taskScope.env, scope.dyn)
+	stepEnv, err := s.renderEnvMap(step.Env, envView)
+	if err != nil {
+		return nil, err
+	}
+	requestEnv, err := s.renderEnvMap(s.req.Env, envView)
+	if err != nil {
+		return nil, err
+	}
+	stepPaths, err := s.renderPaths(step.EnvPaths, envView)
+	if err != nil {
+		return nil, err
+	}
+	scope.taskEnv = taskScope.taskEnv
+	scope.paths = append(stepPaths, taskScope.paths...)
+	scope.env = s.composeEnv(call.task.CleanEnv, taskScope.taskEnv, stepEnv, requestEnv, scope.paths)
+	return scope, nil
 }
 
 // runStep evaluates and executes a single step.
 func (s *runState) runStep(parent context.Context, call *callState, taskScope *varScope, index int, step Step) error {
 	ctx, cancel := withBudget(parent, step.Timeout)
 	defer cancel()
-	scope := s.newScope(ctx, call, &step)
-	scope.task = call.task.Name
-	scope.step = stepLabel(step, index)
-	scope.vars = taskScope.vars
-	scope.dyn = mergeDynamicVars(taskScope.dyn, step.DynamicVars)
-	scope.values = nil
+	label := stepLabel(step, index)
 	if !platformMatches(step.Platform, runtime.GOOS) {
 		s.recordStep(call, step, StepResult{Status: StatusSkipped, Err: nil})
-		s.note("task %s step %s skipped: platform %s", call.task.Name, scope.step, runtime.GOOS)
+		s.note("task %s step %s skipped: platform %s", call.task.Name, label, runtime.GOOS)
 		return nil
 	}
-	vars, err := resolveVarLevel(step.Vars, scope.renderVars())
+	scope, err := s.newStepScope(ctx, call, taskScope, index, step)
 	if err != nil {
-		return s.fail(err, call, scope.step)
+		return s.fail(err, call, label)
 	}
-	scope.vars = mergeDataMaps(taskScope.vars, vars)
 	evaluator, err := compileCondition(step.If, scope.renderVars())
 	if err != nil {
 		if errors.Is(err, errDeferred) {
