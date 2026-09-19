@@ -1,10 +1,35 @@
 {
   "version": 1,
-  "vars": {"message": "hello from kscript"},
+  "vars": {
+    "target": "./...",
+    "enabled": true
+  },
   "tasks": {
     "hello": {
-      "run": "go",
-      "if": "enabled"
+      "desc": "show the Go toolchain version",
+      "if": "vars.enabled == true",
+      "steps": [
+        {
+          "name": "go-version",
+          "exec": {
+            "program": "go",
+            "args": ["version"]
+          }
+        }
+      ]
+    },
+    "check": {
+      "desc": "run go vet once the toolchain check passed",
+      "deps": ["hello"],
+      "steps": [
+        {
+          "name": "vet",
+          "exec": {
+            "program": "go",
+            "args": ["vet", "${vars.target}"]
+          }
+        }
+      ]
     }
   }
 }
