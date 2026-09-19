@@ -16,5 +16,20 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-      - run: go test ./...
+      - run: go build ./...
       - run: go vet ./...
+      - run: go test ./...
+      - name: gofmt
+        if: runner.os == 'Linux'
+        run: test -z "$(gofmt -l .)"
+
+  race:
+    # Container process cleanup and cancellation need the race detector, which
+    # requires cgo and a C toolchain.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - run: go test -race ./...
