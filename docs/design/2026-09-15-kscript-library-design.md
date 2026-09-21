@@ -14,6 +14,7 @@
 | 0.1 | 2026-09-15 | Codex | 建立独立库定位、公共 API、执行语义、Kite 兼容边界、分期范围和验收条件 |
 | 0.2 | 2026-09-15 | Codex | 绑定工作区 IDEV-STD；将 Go 基线改为 1.23+；把脚本定义条件判断纳入首期契约 |
 | 0.3 | 2026-09-21 | Codex | 按用户决定将模块路径改为 `github.com/gookit/taskrun`（主包 `taskrun`），并同步 D01：`kscript` 的 k 是 Kite 遗留前缀，且与 kite-go 旧包 `pkg/kscript` 同名会导致 import 别名 |
+| 0.4 | 2026-09-21 | Codex | 按 CI 实测（GitHub Actions Windows runner 拒绝嵌套 Job Object）修订取消/清理契约：默认 `TreeKillAuto` 在拥有机制不可用时退化为按父进程链终止整棵树，`TreeKillRequired` 保留严格失败语义（新增 D11） |
 
 仅在目标、范围、接口、行为、验收等语义变化时递增文档版本；状态与来源信息纠正不新增修订。
 
@@ -422,6 +423,7 @@ flowchart LR
 
 - Root context 覆盖整个 Run；Task.Timeout 覆盖该次调用的动态变量、deps 和 Steps；Step.Timeout 覆盖该步求值和执行。有效截止时间为父 context 与局部预算中的最早值；0 表示沿用父预算，负值非法。
 - 默认进程后端必须在取消后停止调度、终止所拥有的进程并等待回收。POSIX 采用进程组，Windows 采用 Job Object 或等价已验证实现；若要求的子进程清理能力不可用，应在启动前返回明确错误，不能静默降为只杀父进程。
+  - 0.4 修订：Windows 上"拥有机制不可用"包含嵌套 Job Object 被拒（受限宿主，例如 GitHub Actions 的 Windows runner 已把它自己的 Job 套在步骤进程上，`AssignProcessToJobObject` 返回 Access denied）。此时默认行为不再是直接失败，而是退化为按活动父进程链终止整棵树（`taskkill /T /F /PID`），子孙进程仍被清理，不违反"不得只杀父进程"；需要严格语义的调用方可用 `ProcessEngine{TreeKill: TreeKillRequired}` 保留失败行为。两条路径均有真实执行测试。
 - 子进程无限逃逸、权限变更或自行脱离宿主控制不在库可保证范围；终止宽限期和具体平台实现必须在实施阶段验证。
 - nil Stdin 表示 EOF，nil Stdout/Stderr 表示丢弃；不自动使用全局终端。库的诊断输出与子进程数据输出分开。
 - CaptureLimit 为 0 时仅流式转发，不收集。开启收集后每流有界，普通输出超限截断收集并置 Truncated，但继续排空并转发，避免阻塞；动态变量输出超限则失败。
@@ -518,6 +520,7 @@ Kite 迁移前保留独立回退点；失败时退回依赖和适配提交，原
 | D08 | 提案 | Kite 命令分发和旧配置兼容留在 Kite；宿主扩展用显式 Handler |
 | D09 | 提案 | 原生 schema version 1；Taskfile/justfile 兼容后续独立设计 |
 | D10 | 用户已确认/提案 | 首期支持 Go 1.23+、MIT、v0.x；新库选择最小必要依赖，不复制 Kite go.mod |
+| D11 | 提案（2026-09-21，CI 实测驱动） | 子进程清理分层：默认 `TreeKillAuto`（Job Object 优先，被拒则按父进程链终止整棵树，子孙仍被清理）；`TreeKillRequired` 保留严格失败语义。理由：受限宿主（GitHub Actions Windows runner 拒绝嵌套 Job Object）上直接失败会使库不可用，而设计真正禁止的是"只杀父进程" |
 
 ## 待确认事项
 
