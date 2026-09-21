@@ -30,8 +30,8 @@
 | T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object（受限宿主被拒时按 `TreeKillAuto` 退化为父进程链终止整棵树，`TreeKillRequired` 保留严格失败，见设计修订 0.4）、宽限期、`Canceled`/`TimedOut` 分类 |
 | T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
 | T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器（含 ParseEnv 的 `${env.*}` 重写）+ `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；任务级、配置级双引擎对照均通过；仓库真实配置（`config/module/scripts.yml`，8 个任务）转换、校验与规划全部通过、0 warning；列表/搜索/`--show` 有意保留旧实现；仅剩“用真实配置实际执行任务”（有副作用，需你运行） |
-| T10 第二应用与 Go 版本矩阵 | 部分 | 仓库已建（`gookit/taskrun`）并推送；CI 在真实 runner 上全绿（`go.yml`：ubuntu × Go 1.23/1.24/1.25/stable 四个作业，Revive 0 告警；`race-and-windows.yml`：ubuntu `-race` + windows 构建与测试）；第二真实应用仍未确认，`tmp/taskrun-consumer` 使用 `replace` |
-| T11 文档、版本与发布准备 | 基本完成 | README/中文 README/kite-migration/CHANGELOG 完成；LICENSE 保留源码原始版权行；`docs/release/2026-09-19-v0.1.0-candidate-review.md` 形成发布候选（含依赖许可证、API 面、限制与发布清单）；缺外部动作授权（建远端/推送/tag/发布） |
+| T10 第二应用与 Go 版本矩阵 | 部分 | 仓库已建（`gookit/taskrun`）并发布 `v0.1.0`；CI 在真实 runner 上全绿（`go.yml`：ubuntu × Go 1.23/1.24/1.25/stable 四个作业，Revive 0 告警；`race-and-windows.yml`：ubuntu `-race` + windows 构建与测试）；工作区外 consumer 已从 `replace` 改为真实版本 `v0.1.0` 并通过；第二真实应用仍未确认 |
+| T11 文档、版本与发布准备 | 完成 | README/中文 README/kite-migration/CHANGELOG 完成；LICENSE 保留源码原始版权行；发布候选审查完成；`v0.1.0` 已发布（tag `156c09e`，GitHub Release 由 `Tag-release` 工作流创建）；kite-go 已切到该版本（commit `ac8270e`） |
 
 ## 验证命令与结果（2026-09-19）
 
@@ -183,14 +183,12 @@ Go 1.23 工具链与 linux/darwin 交叉编译全部通过。
 
 ## 下一步
 
-1. 外部动作（命令已备好，见 `docs/release/2026-09-21-publish-checklist.md`）：
-   本机目录改名、创建 `gookit/taskrun` 远端并推送、打 `v0.1.0` tag、把 kite-go 的临时 replace
-   换成真实版本、工作区外 consumer 正式验收。
-2. T09 剩余：在真实 Kite 配置上以 `script_engine: taskrun` 实际执行一次任务（只读的转换/校验/规划已完成，
-   执行会产生副作用，需由你在自己的机器上触发）。
-3. T10：确认第二真实应用并接入；在真实 runner 上执行 Go 1.23/1.25 与 race 矩阵。
-3. T11 剩余（均需外部动作授权）：创建远端仓库、推送、打 `v0.1.0` tag、发布；
-   之后把 `kite-go/go.mod` 的临时 replace 换成真实版本号并做工作区外验收。
+发布相关的步骤全部完成（见「发布 v0.1.0」一节）。剩下的三件事：
+
+1. T09 剩余：在真实 Kite 配置上以 `script_engine: taskrun` 实际执行一次任务（只读的转换/校验/
+   规划已完成，执行会产生副作用，需由你在自己的机器上触发）。
+2. T10：确认第二真实应用并接入；Go 版本矩阵与 race 已在 CI 上执行（见「验证命令与结果」）。
+3. 可选收尾：本机目录名 `gookit2/kscript` → `gookit2/taskrun`（不影响构建，见改名一节）。
 
 ## 本地开发命令
 
@@ -225,3 +223,31 @@ kite-go 侧的 require+replace 与桥接导入（别名 `kscript2` 已删除）�
 `script_engine: taskrun`、工作区外 consumer。
 设计文档升到 Draft 0.3（含 D01 更新），计划升到 0.3。
 本机目录名仍为 `gookit2/kscript`（被工作区文件锁阻塞，未强改）。
+
+## 发布 v0.1.0（2026-09-21）
+
+| 步骤 | 结果 |
+|---|---|
+| CHANGELOG 收尾 | `## [Unreleased]` → `## [v0.1.0] - 2026-09-21`（commit `156c09e`） |
+| tag | `v0.1.0`（annotated）→ `156c09e`，已推送 |
+| GitHub Release | `Tag-release` 工作流成功（run 35592352634）；首次发布没有上一个 tag，`chlog prev last` 生成的说明为空，已把 CHANGELOG 的 v0.1.0 段落写入发布说明 |
+| 真实代理正式验收 | 全新 module 用 `proxy.golang.com.cn` / `goproxy.io` 取到 `v0.1.0`（`Origin.Hash` = `156c09e`），`go list -deps` 无 kite-go，运行输出 `status=succeeded tasks=2 steps=4` |
+| kite-go 切换 | commit `ac8270e`：去掉临时 `replace`，`require github.com/gookit/taskrun v0.1.0`；`go build ./...` 与 `pkg/kscript`、`bridge`、`cmdbiz` 测试通过（双引擎对照现在跑在已发布版本上） |
+| 工作区外 consumer | `tmp/taskrun-consumer` 去掉 replace 后用 v0.1.0，测试通过、无 kite-go 泄漏 |
+
+发布过程中值得记下的两件事：
+
+1. `github.com:443` 在这台机器上反复不可达（connect 超时与 connection reset 交替），
+   `api.github.com` 与 `codeload` 一直可用；推送/取模块都靠重试等到窗口期才成功。
+   `goproxy.cn` 当时还没缓存该模块（返回 not found），`proxy.golang.com.cn` 与
+   `goproxy.io` 已能提供。
+2. 覆盖率复核阶段发现的进程树控制对象重复释放缺陷（见上一节）赶在 tag 之前修掉并补了回归测试，
+   因此 `v0.1.0` 包含该修复。
+
+仍未闭环的事项：
+
+- T09 剩余：在真实 Kite 配置上以 `script_engine: taskrun` 实际执行一次任务（只读的转换/校验/
+  规划已完成；实际执行有副作用，需你运行）。
+- T10：第二真实应用未确认（项目路径与 Go 版本）。
+- 本机目录名仍是 `gookit2/kscript`：kite-go 的 `replace` 已删除，目录名不再影响构建，
+  改名降级为可选的收尾动作。

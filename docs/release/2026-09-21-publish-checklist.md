@@ -13,7 +13,11 @@
 | Revive 告警 | 已完成：7 条告警全部处理，commit `2e1e69b`；CI Revive 步骤现为 0 条 |
 | 推送 | 已完成：`main` 已到 `94d185d`。推送过程中 `github.com:443` 出现过一段时间不可达（`api.github.com` 一直可用），恢复后推送成功 |
 | CI 结论 | 已完成：`action-tests`（Go 1.23/1.24/1.25/stable 四个作业）通过；`race-and-windows` 的 Windows 与 Race detector 两个作业通过 |
-| tag `v0.1.0` | 未执行（需授权；第 3 步） |
+| tag `v0.1.0` | 已完成：`156c09e`（annotated tag，2026-09-21 11:07） |
+| GitHub Release | 已完成：`Tag-release` 工作流成功，https://github.com/gookit/taskrun/releases/tag/v0.1.0 。注意首次发布时 `chlog prev last` 没有上一个 tag，生成的说明为空，已把 CHANGELOG 的 v0.1.0 段落写入发布说明 |
+| 真实代理正式验收 | 已完成：全新 module 通过 `proxy.golang.com.cn`/`goproxy.io` 取到 `v0.1.0`（哈希 `156c09e`），`go list -deps` 无 kite-go，运行输出 `status=succeeded tasks=2 steps=4` |
+| kite-go 切真实版本 | 已完成：commit `ac8270e`（去掉 replace，`require github.com/gookit/taskrun v0.1.0`），`go build ./...` 与 `pkg/kscript`、`bridge`、`cmdbiz` 测试通过 |
+| 工作区外 consumer 切真实版本 | 已完成：`tmp/taskrun-consumer` 去掉 replace 后用 v0.1.0，测试通过且无 kite-go 泄漏 |
 
 推送后可这样确认 Windows job：
 
