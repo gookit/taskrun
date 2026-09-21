@@ -109,6 +109,10 @@ Shell 展开的 env）分别在旧 Runner 与桥接引擎上运行，并把每�
 已修复的既有缺陷：`ScriptTask.resolveIfExpr` 对空条件直接 `expr.Compile("")` 会 panic；
 现在空条件返回 true。设计明确新实现不保留 panic，该测试此前一直 panic 失败。
 
+观察器接入（2026-09-21）：桥接默认把库事件转发到 Kite 日志（调试级；失败步骤/任务为警告级），
+`bridge.WithEventObserver` 可换成 Kite 自己的进度渲染。可见性仍由宿主日志级别决定（对应旧
+`Verbose`/`Silent`），库只返回数据，不打印。
+
 ## 尚未完成
 
 - `script_engine: taskrun` 尚未在真实配置上**实际执行**过任务（转换、校验、规划已验证；
