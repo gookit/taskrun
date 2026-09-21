@@ -30,7 +30,7 @@
 | T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object（受限宿主被拒时按 `TreeKillAuto` 退化为父进程链终止整棵树，`TreeKillRequired` 保留严格失败，见设计修订 0.4）、宽限期、`Canceled`/`TimedOut` 分类 |
 | T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
 | T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器（含 ParseEnv 的 `${env.*}` 重写）+ `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；任务级、配置级双引擎对照均通过；仓库真实配置（`config/module/scripts.yml`，8 个任务）转换、校验与规划全部通过、0 warning；列表/搜索/`--show` 有意保留旧实现；仅剩“用真实配置实际执行任务”（有副作用，需你运行） |
-| T10 第二应用与 Go 版本矩阵 | 部分 | 仓库已建（`gookit/taskrun`）并推送，CI 已在真实 runner 上跑（`go.yml`：ubuntu × Go 1.23/1.24/1.25/stable；`race-and-windows.yml`：ubuntu `-race` + windows 构建与测试）；第二真实应用仍未确认，`tmp/taskrun-consumer` 使用 `replace` |
+| T10 第二应用与 Go 版本矩阵 | 部分 | 仓库已建（`gookit/taskrun`）并推送；CI 在真实 runner 上全绿（`go.yml`：ubuntu × Go 1.23/1.24/1.25/stable 四个作业，Revive 0 告警；`race-and-windows.yml`：ubuntu `-race` + windows 构建与测试）；第二真实应用仍未确认，`tmp/taskrun-consumer` 使用 `replace` |
 | T11 文档、版本与发布准备 | 基本完成 | README/中文 README/kite-migration/CHANGELOG 完成；LICENSE 保留源码原始版权行；`docs/release/2026-09-19-v0.1.0-candidate-review.md` 形成发布候选（含依赖许可证、API 面、限制与发布清单）；缺外部动作授权（建远端/推送/tag/发布） |
 
 ## 验证命令与结果（2026-09-19）
@@ -56,22 +56,26 @@ cd ../../inhere-tools/kite-go && go build ./...
 go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引擎与配置级对照
 ```
 
-未完成的验证：
+本机无法执行的验证：
 
 - `go test -race ./...`：本机为 Windows 且无 C 工具链（`CGO_ENABLED=0`，无 gcc），无法本地运行；
-  已由 `.github/workflows/race-and-windows.yml` 的 ubuntu job 在真实 runner 上执行。替代措施：`TestConcurrentRunsAreIsolated`
-  用 16 个并发 Run × 4 轮、每轮校验输出等于本请求的变量值，可在没有 race 检测时发现跨请求串值。
+  已由 `.github/workflows/race-and-windows.yml` 的 ubuntu job 在真实 runner 上执行并通过。替代措施：
+  `TestConcurrentRunsAreIsolated` 用 16 个并发 Run × 4 轮、每轮校验输出等于本请求的变量值，
+  可在没有 race 检测时发现跨请求串值。
 - CI：`.github/workflows/go.yml`（组织模板，ubuntu × Go 1.23/1.24/1.25/stable）与
   `.github/workflows/race-and-windows.yml`（新增：ubuntu `-race`、windows build+vet+test）。
-  本机目录暂无 C 编译器，windows 侧此前只有本地证据。
 
-CI 实测结论（仓库 `gookit/taskrun`，2026-09-21）：
+CI 实测结论（仓库 `gookit/taskrun`，2026-09-21，提交 `2e1e69b`）：
 
 | 运行 | 结论 |
 |---|---|
-| `action-tests`（`go.yml`，Go 1.23/1.24/1.25/stable） | 通过（run #7） |
-| `race-and-windows` → Race detector（ubuntu，`go test -race`） | 通过（run #2） |
-| `race-and-windows` → Windows（build + vet + test） | run #2 在 `Run tests` 失败 |
+| `action-tests`（`go.yml`，Go 1.23/1.24/1.25/stable 四个作业） | 通过（run 35581088175） |
+| `action-tests` 的 Revive 步骤 | 0 条告警（此前 7 条，见下） |
+| `race-and-windows` → Race detector（ubuntu，`go test -race`） | 通过（run 35581088159，42s） |
+| `race-and-windows` → Windows（build + vet + test） | 通过（run 35581088159，1m4s） |
+| 更早的 Windows job（run 35578758700） | 失败，根因见下；修复后连续两次通过 |
+
+两个工作流都带 `paths: go.mod / **.go / **.yml` 过滤，因此纯文档提交不会触发 CI。
 
 Windows 失败的根因（用 `gh run view --job <id> --log-failed` 读到）：
 
@@ -93,7 +97,22 @@ GitHub Actions 的 Windows runner 已经把它自己的 Job Object 套在步骤�
 - Linux 侧不受影响：进程组始终可用（race job 已连续两次通过）。
 - 该行为属于语义变更，已按规范记入设计修订（`docs/design/2026-09-15-kscript-library-design.md`
   修订 0.4 与决策 D11），不是静默改行为。
-- 第二真实应用接入与结果记录（T10）。
+
+## Revive 告警清理（2026-09-21，提交 `2e1e69b`）
+
+首次在真实 runner 上跑 `go.yml` 时，Revive 步骤报出 7 条告警。逐条处理，不做忽略：
+
+| 位置 | 问题 | 处置 |
+|---|---|---|
+| `runner.go` | 局部变量名 `call_` 带下划线 | 改名为 `hostCall`（外层已有 `call *callState`，不能直接叫 `call`） |
+| `runner.go` | `fallbackCause` 声明了 `fallback` 却从不使用 | 删除该函数：它是空操作，且分支里的另一条路径只会把同一个错误再赋一次，属于误导性代码 |
+| `process_unix.go` | `attach` 的 `cmd` 参数未使用 | 与 Windows 实现一致，去掉参数名（签名受 `treeControl` 接口约束） |
+| `taskrun.go` | 缺少包注释 | 补 `Package taskrun` 注释 |
+| `formats/legacy.go` | `legacyScriptFile` 的 `warn`、`translateLegacyTemplate` 的 `warn`/`where` 未使用 | 删除这些参数；随后 `legacyDynamicSpec` 的 `warn` 也失去用途，一并删除（级联） |
+
+`warn` 回调本身仍在真正使用它的地方保留（`__settings` 忽略、未归属字段、平台覆盖等）。
+本地用与 CI 同款默认规则运行 `revive ./...`：0 条告警；`gofmt`、`go vet`、`go test`、
+Go 1.23 工具链与 linux/darwin 交叉编译全部通过。
 
 ## 设计验收矩阵覆盖情况
 
@@ -113,7 +132,7 @@ GitHub Actions 的 Windows runner 已经把它自己的 Job Object 套在步骤�
 | A12 | 大输出、截断、writer 失败 | 覆盖 |
 | A13 | 非零退出、ignore_error、取消、未知根任务 | 覆盖 |
 | A14 | Kite 旧配置 fixture 行为对照 | 覆盖（`bridge/compat_test.go` 任务级 trace 逐字节一致 + 失败行为一致；`internal/biz/cmdbiz/scriptengine_e2e_test.go` 用真实形态配置文件 `DefineFiles` + `ScriptDirs` + `__settings` 双引擎对照一致；用户本机真实配置端到端待补） |
-| A15 | 第二真实应用 | 未完成 |
+| A15 | 第二真实应用 | 未完成（待确认项目路径与 Go 版本，见 T10） |
 
 ## 与计划的偏差（需评审确认）
 

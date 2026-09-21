@@ -9,9 +9,11 @@
 |---|---|
 | 建远端 + 首次推送 | 已完成（`origin` = `https://github.com/gookit/taskrun.git`，`main` 已推送） |
 | 组织 CI 与新增工作流 | 已完成：`go.yml`（组织模板，仅修了 `matrix.os` 笔误）、`codeql.yml`、`release.yml`，另加 `race-and-windows.yml`（ubuntu `-race` + windows 构建/测试） |
-| Windows CI 失败与修复 | 已修复待推送：commit `688c5b5`（分层清理，见设计修订 0.4 / D11）。本机仓库中 `688c5b5`、`8a79258`、`c110447` 尚未推送 |
-| 推送 | 阻塞：写此文件时 `github.com:443` 从本机不可达（`Failed to connect ... port 443`），已重试多次；`api.github.com` 可达（`gh` 命令正常） |
-| tag `v0.1.0` | 未执行（等 windows job 转绿再打） |
+| Windows CI 失败与修复 | 已完成：commit `688c5b5`（分层清理，见设计修订 0.4 / D11） |
+| Revive 告警 | 已完成：7 条告警全部处理，commit `2e1e69b`；CI Revive 步骤现为 0 条 |
+| 推送 | 已完成：`main` 已到 `94d185d`。推送过程中 `github.com:443` 出现过一段时间不可达（`api.github.com` 一直可用），恢复后推送成功 |
+| CI 结论 | 已完成：`action-tests`（Go 1.23/1.24/1.25/stable 四个作业）通过；`race-and-windows` 的 Windows 与 Race detector 两个作业通过 |
+| tag `v0.1.0` | 未执行（需授权；第 3 步） |
 
 推送后可这样确认 Windows job：
 
