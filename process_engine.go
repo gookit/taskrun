@@ -25,6 +25,9 @@ type ProcessEngine struct {
 	// skipJobObject is used by tests to exercise the fallback controller on a
 	// host where job objects work.
 	skipJobObject bool
+	// controlFactory replaces the platform tree controller in tests, so control
+	// accounting (exactly one release per created control) can be asserted.
+	controlFactory func(useJob bool) (treeControl, error)
 }
 
 // Execute implements Engine.
@@ -43,7 +46,11 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 	if err != nil {
 		return result, &ProcessError{Kind: ErrKindStart, Err: errf("process tree cleanup is unavailable: %v", err)}
 	}
-	defer control.release()
+	// The deferred call reads control at exit, so the fallback path below
+	// releases the owning control explicitly and this releases whichever
+	// control is current. Binding the receiver here would close the owning
+	// control twice.
+	defer func() { control.release() }()
 
 	cmd := exec.Command(program, args...)
 	cmd.Dir = action.Dir
@@ -77,7 +84,7 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 		// restricted job already owns this process on a CI runner. TreeKillAuto
 		// switches to the parent-chain controller, which still terminates the
 		// whole tree; TreeKillRequired fails the action instead.
-		fallback, fallbackErr := newTreeControl(false)
+		fallback, fallbackErr := e.newControl(false)
 		if e.TreeKill == TreeKillRequired || fallbackErr != nil {
 			control.force(cmd)
 			_ = cmd.Wait()
@@ -85,7 +92,6 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 		}
 		control.release()
 		control = fallback
-		defer control.release()
 	}
 
 	grace := e.grace
@@ -122,8 +128,6 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 	if state := cmd.ProcessState; state != nil && result.Started {
 		result.ExitCode = exitCodePtr(state.ExitCode())
 	}
-	outWriter.finish()
-	errWriter.finish()
 	result.Output = outWriter.bytes()
 	result.ErrorOutput = errWriter.bytes()
 	result.Truncated = outWriter.truncated || errWriter.truncated
@@ -155,15 +159,24 @@ func (e ProcessEngine) treeControl() (treeControl, error) {
 		if e.TreeKill == TreeKillRequired {
 			return nil, errf("process tree job object is unavailable")
 		}
-		return newTreeControl(false)
+		return e.newControl(false)
 	}
-	control, err := newTreeControl(true)
+	control, err := e.newControl(true)
 	if err != nil && e.TreeKill == TreeKillAuto {
 		// Creating the owning job failed; the parent-chain controller still
 		// terminates the tree.
-		return newTreeControl(false)
+		return e.newControl(false)
 	}
 	return control, err
+}
+
+// newControl builds a tree controller, honouring the test factory when one is
+// set.
+func (e ProcessEngine) newControl(useJob bool) (treeControl, error) {
+	if e.controlFactory != nil {
+		return e.controlFactory(useJob)
+	}
+	return newTreeControl(useJob)
 }
 
 func orErr(err error) error {
@@ -336,8 +349,6 @@ func (w *captureWriter) Write(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
-
-func (w *captureWriter) finish() {}
 
 func (w *captureWriter) bytes() []byte {
 	if w.limit <= 0 || len(w.collected) == 0 {

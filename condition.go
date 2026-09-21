@@ -63,6 +63,3 @@ func compileCondition(source string, rv renderVars) (conditionEvaluator, error) 
 		return result, nil
 	}, nil
 }
-
-// condEnvKeys lists the reserved condition namespaces.
-func condEnvKeys() []string { return []string{"vars", "env", "args", "host", "run"} }

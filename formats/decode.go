@@ -519,7 +519,7 @@ func (d *decoder) decodeTaskCall(path string, spec map[string]any) (*taskrun.Tas
 	}
 	call := &taskrun.TaskCall{Name: name}
 	// A present args key replaces the inherited arguments even when empty.
-	if raw, present := spec["args"]; present {
+	if _, present := spec["args"]; present {
 		args, _, err := d.getStringList(spec, path, "args")
 		if err != nil {
 			return nil, err
@@ -528,7 +528,6 @@ func (d *decoder) decodeTaskCall(path string, spec map[string]any) (*taskrun.Tas
 			args = []string{}
 		}
 		call.Args = args
-		_ = raw
 	}
 	forward, ok, err := d.getBool(spec, path, "forward_args")
 	if err != nil {

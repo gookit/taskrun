@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -382,4 +384,75 @@ func writeTreeScript(t *testing.T, dir, marker string) string {
 		return "tree.cmd"
 	}
 	return `( sleep 3 && touch '` + marker + `' ) & sleep 12`
+}
+
+// countingTree records how often one control is released, so the test can
+// assert the accounting rule per control: every created control is released
+// exactly once, including the owning control that a fallback replaces.
+type countingTree struct {
+	useJob   bool
+	releases int
+}
+
+func (t *countingTree) sysProcAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{} }
+
+func (t *countingTree) attach(*exec.Cmd) error {
+	if t.useJob {
+		return errors.New("job object is unavailable")
+	}
+	return nil
+}
+
+func (t *countingTree) graceful(*exec.Cmd) {}
+
+func (t *countingTree) force(*exec.Cmd) {}
+
+func (t *countingTree) release() { t.releases++ }
+
+// TestFallbackReleasesTheOwningControlExactlyOnce is a regression test: the
+// owning control used to be released twice, because the deferred release bound
+// its receiver before the fallback replaced it, while the fallback was never
+// released at all. A second CloseHandle can close an unrelated handle if the
+// value was reused in between.
+func TestFallbackReleasesTheOwningControlExactlyOnce(t *testing.T) {
+	var created []*countingTree
+	r := newTestRunner(t, Definition{
+		Tasks: map[string]Task{"t": {Steps: []Step{{Name: "s", Exec: echoExec()}}}},
+	}, WithEngine(ProcessEngine{controlFactory: func(useJob bool) (treeControl, error) {
+		tree := &countingTree{useJob: useJob}
+		created = append(created, tree)
+		return tree, nil
+	}}))
+
+	if got := mustRun(t, r, Request{Task: "t", IO: IO{CaptureLimit: 1 << 12}}).Status; got != StatusSucceeded {
+		t.Fatalf("status=%s", got)
+	}
+	if len(created) != 2 {
+		t.Fatalf("controls created = %d, want 2 (owning + fallback)", len(created))
+	}
+	if got := created[0].releases; got != 1 {
+		t.Fatalf("owning control released %d times, want exactly 1", got)
+	}
+	if got := created[1].releases; got != 1 {
+		t.Fatalf("fallback control released %d times, want exactly 1", got)
+	}
+}
+
+// TestUnresolvableProgramCreatesNoControl documents that a program which cannot
+// be resolved fails before a tree control is created, so nothing can leak.
+func TestUnresolvableProgramCreatesNoControl(t *testing.T) {
+	created := 0
+	r := newTestRunner(t, Definition{
+		Tasks: map[string]Task{"t": {Steps: []Step{{Name: "s", Exec: &ExecSpec{Program: "taskrun-no-such-program"}}}}},
+	}, WithEngine(ProcessEngine{controlFactory: func(bool) (treeControl, error) {
+		created++
+		return &countingTree{}, nil
+	}}))
+
+	if _, err := r.Run(context.Background(), Request{Task: "t"}); !errors.Is(err, ErrStart) {
+		t.Fatalf("err=%v, want ErrStart", err)
+	}
+	if created != 0 {
+		t.Fatalf("controls created = %d, want 0", created)
+	}
 }

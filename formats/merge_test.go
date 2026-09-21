@@ -1,6 +1,7 @@
 package formats
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -97,5 +98,25 @@ func TestMergeOverridesVarsAndEnvByKey(t *testing.T) {
 func TestMergeRejectsEmptyInput(t *testing.T) {
 	if _, err := Merge(nil, false); err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+// TestMergeDedupesEnvPaths keeps the effective PATH free of duplicates when
+// several sources repeat the same entry.
+func TestMergeDedupesEnvPaths(t *testing.T) {
+	paths, err := mergeDefinitions(t, []string{
+		"version: 1\nenv_paths: [/opt/bin, /opt/other]\ntasks:\n  a:\n    steps:\n      - exec: {program: go}\n",
+		"version: 1\nenv_paths: [/opt/bin]\ntasks:\n  b:\n    steps:\n      - exec: {program: go}\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	def, err := LoadFiles(paths, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/opt/bin", "/opt/other"}
+	if !reflect.DeepEqual(def.EnvPaths, want) {
+		t.Fatalf("EnvPaths = %v, want %v", def.EnvPaths, want)
 	}
 }
