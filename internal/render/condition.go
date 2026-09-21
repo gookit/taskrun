@@ -1,4 +1,4 @@
-package taskrun
+package render
 
 import (
 	"strings"
@@ -8,23 +8,20 @@ import (
 	"github.com/gookit/taskrun/internal/data"
 )
 
-// conditionEvaluator is a compiled condition. An empty condition is always true.
-type conditionEvaluator func() (bool, error)
-
-// compileCondition compiles an expr condition against the read-only view. A
-// condition may read vars, env, args, host and run metadata; it cannot call
-// host methods. Conditions that need a declared dynamic variable resolve it
-// through rv.Dynamic, which Inspect leaves nil so the condition is reported as
+// CompileCondition compiles an expr condition against the read-only view. A
+// condition may read vars, env, args, host and run metadata; it cannot call host
+// methods. A condition that needs a declared dynamic variable resolves it
+// through Vars.Dynamic, which Inspect leaves nil so the condition is reported as
 // deferred instead of running a command.
-func compileCondition(source string, rv renderVars) (conditionEvaluator, error) {
+func CompileCondition(source string, rv Vars) (func() (bool, error), error) {
 	if strings.TrimSpace(source) == "" {
 		return func() (bool, error) { return true, nil }, nil
 	}
 	env := map[string]any{}
 	varsCopy := data.CloneMap(rv.Vars)
-	if referencesAny(source, rv.DeferredNames) {
+	if ReferencesAny(source, rv.DeferredNames) {
 		if rv.Dynamic == nil {
-			return nil, errDeferred
+			return nil, ErrDeferred
 		}
 		for _, name := range rv.DeferredNames {
 			value, found, err := rv.Dynamic(name)
@@ -51,16 +48,16 @@ func compileCondition(source string, rv renderVars) (conditionEvaluator, error) 
 	}
 	program, err := expr.Compile(source, expr.Env(env))
 	if err != nil {
-		return nil, invalidDef("invalid condition %q: %v", source, err)
+		return nil, invalid("invalid condition %q: %v", source, err)
 	}
 	return func() (bool, error) {
 		value, err := expr.Run(program, env)
 		if err != nil {
-			return false, invalidDef("condition %q failed: %v", source, err)
+			return false, invalid("condition %q failed: %v", source, err)
 		}
 		result, ok := value.(bool)
 		if !ok {
-			return false, invalidDef("condition %q must return bool, got %T", source, value)
+			return false, invalid("condition %q must return bool, got %T", source, value)
 		}
 		return result, nil
 	}, nil
