@@ -3,6 +3,23 @@
 All notable changes to this module are documented here. The module follows
 SemVer; versions before v1 are experimental and may change the API.
 
+## [Unreleased]
+
+### Fixed
+
+- The cache behind condition reference detection is concurrency safe. It was a
+  plain map read and written by every run that evaluates a condition, so two
+  concurrent runs could crash the process with `concurrent map read and map
+  write`.
+
+### Changed
+
+- Implementation moved behind `internal/` so the root package is only the public
+  API and its orchestration: `internal/data` (copy, merge and validation
+  helpers), `internal/graph` (cycle and depth checks), `internal/render`
+  (templates and conditions) and `internal/process` (platform process tree
+  control). The exported API is unchanged.
+
 ## [v0.1.0] - 2026-09-21
 
 ### Fixed

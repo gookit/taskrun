@@ -173,13 +173,36 @@ Go 1.23 工具链与 linux/darwin 交叉编译全部通过。
 
 | 偏差 | 说明 |
 |---|---|
-| 文件布局 | 计划列出 `internal/graph`、`internal/render`、`internal/process`；这些实现依赖主包类型，放在主包同名文件中（`graph.go`、`render.go`、`condition.go`、`process_*.go`），公共 API 语义不变 |
+| 文件布局 | 计划列出 `internal/graph`、`internal/render`、`internal/process`。2026-09-21 已按此整理：`internal/data`（拷贝/合并/校验辅助）、`internal/graph`（环与深度检查）、`internal/render`（模板与条件）、`internal/process`（平台进程树控制）四个内部包；根包只留公开 API 与编排（`taskrun.go`、`definition.go`、`request.go`、`result.go`、`engine.go`、`event.go`、`runner.go`、`process_engine.go`、`render.go` 薄适配）。进程**引擎核心**仍在根包，因为它就是公开类型 `ProcessEngine` 的实现；只把平台相关的树控制移入内部包。公开 API 逐字节未变（用 `go doc -all` 前后对比验证） |
 | `Timeout` 类型 | Plan/T02 未固定单位；实现改为 `time.Duration`，配置使用时长字符串。原 int64 纳秒语义会使 `timeout: 5` 变成 5ns |
 | `Inspect` 增加 ctx | 设计草案签名为 `Inspect(req)`；实现为 `Inspect(ctx, req)`，以便取消与一致性，语义未变 |
 | `BaseDir` 必须绝对 | 设计明确要求；`formats.LoadFile` 自动转换为绝对路径，调用方需注意 |
 | 第二应用 | T01 Gate 未确认路径，仍为开放项 |
 | Kite 依赖方式 | `kite-go/go.mod` 使用临时 `replace github.com/gookit/taskrun => ../../gookit2/kscript`（设计允许的本地迁移验证）；发布版本后需改为真实版本号 |
 | Kite 引擎开关 | 新增 `script_engine: legacy|taskrun`（默认 `legacy`），作为回退点；旧 Runner 未被删除 |
+
+## 实现整理进 internal（2026-09-21，提交 `4034f4b`、`b3417cb`、`90613ad`）
+
+按用户要求把无需暴露的实现收进 `internal/`，根目录从 16 个实现文件降到 9 个：
+
+| 位置 | 内容 | 说明 |
+|---|---|---|
+| `internal/data` | 拷贝/合并/校验辅助（`Clone*`、`Merge`、`Validate`、`EnvList`、`EnvKey`、`Sorted*`） | 纯 Go 值操作，`Validate` 返回普通错误，根包用 `validateData` 包装回 `invalid_request` |
+| `internal/graph` | 环与调用链深度检查（`Check`、`CycleError`、`DepthError`） | 只看节点名与边表；根包把错误映射回 `ErrDependencyCycle`/`invalid_definition` |
+| `internal/render` | 模板渲染与 expr 条件（`Render`、`Refs`、`ReferencesAny`、`ResolveLevel`、`DetectCycle`、`CompileCondition`） | 自带 `Kind`/`Error` 与 `ErrDeferred`；根包 `render.go` 变成薄适配，`renderVars` 是 `render.Vars` 的别名 |
+| `internal/process` | 平台进程树控制（`TreeControl`、`New`、POSIX 进程组、Windows Job Object + taskkill 回退） | 引擎核心仍留在根包，因为它就是公开 `ProcessEngine` 的实现 |
+
+过程控制：每一步都用 `go doc -all .` 与整理前快照逐字节对比，确认**公开 API 未变**；
+每步都跑全量测试、`go vet`、revive（0 告警）与 linux/darwin 交叉编译。
+
+### 顺带修掉的并发缺陷
+
+条件里「是否引用了动态变量」的检测用了一个**包级可变 map 缓存**（`identifierCache`）来记住
+每个名字的正则。`compileCondition` 在运行期对每个任务/步骤条件都会调用它，因此两个并发
+`Run` 会同时读写该 map。Go 对这种情况直接致命：`fatal error: concurrent map read and map
+write`（不只是 race 报告）。整理时改为 `sync.Map`，并新增
+`TestReferencesAnyIsConcurrencySafe`（16 goroutine × 200 轮，各自不同名字）钉住：
+把实现临时改回普通 map 时该测试立刻崩溃，恢复 `sync.Map` 后连续 5 轮通过。
 
 ## 下一步
 
