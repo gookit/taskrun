@@ -29,7 +29,7 @@
 | T06 进程/Shell/file/host 引擎 | 基本完成 | `process_engine.go`；显式 Shell 选择、argv 不二次分词、file 走注册表解释器、dry-run 零副作用、错误分类 |
 | T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object（受限宿主被拒时按 `TreeKillAuto` 退化为父进程链终止整棵树，`TreeKillRequired` 保留严格失败，见设计修订 0.4）、宽限期、`Canceled`/`TimedOut` 分类 |
 | T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
-| T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器（含 ParseEnv 的 `${env.*}` 重写）+ `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；任务级、配置级双引擎对照均通过；仓库真实配置（`config/module/scripts.yml`，8 个任务）转换、校验与规划全部通过、0 warning；列表/搜索/`--show` 有意保留旧实现；仅剩“用真实配置实际执行任务”（有副作用，需你运行） |
+| T09 Kite 迁移 | 完成 | `formats/legacy.go` 转换器（含 ParseEnv 的 `${env.*}` 重写）+ `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；任务级、配置级双引擎对照均通过；仓库真实配置（`config/module/scripts.yml`，8 个任务）转换、校验、规划全部通过、0 warning；真实配置上的任务已通过独立库真实执行（`bridge/repository_config_test.go` 的 `TestRepositoryConfigShippedTaskExecutes` 跑 `st: git status`，只读）；列表/搜索/`--show` 有意保留旧实现 |
 | T10 第二应用与 Go 版本矩阵 | 部分 | 仓库已建（`gookit/taskrun`）并发布 `v0.1.0`；CI 在真实 runner 上全绿（`go.yml`：ubuntu × Go 1.23/1.24/1.25/stable 四个作业，Revive 0 告警；`race-and-windows.yml`：ubuntu `-race` + windows 构建与测试）；工作区外 consumer 已从 `replace` 改为真实版本 `v0.1.0` 并通过；第二真实应用仍未确认 |
 | T11 文档、版本与发布准备 | 完成 | README/中文 README/kite-migration/CHANGELOG 完成；LICENSE 保留源码原始版权行；发布候选审查完成；`v0.1.0` 已发布（tag `156c09e`，GitHub Release 由 `Tag-release` 工作流创建）；kite-go 已切到该版本（commit `ac8270e`） |
 
@@ -246,8 +246,8 @@ kite-go 侧的 require+replace 与桥接导入（别名 `kscript2` 已删除）�
 
 仍未闭环的事项：
 
-- T09 剩余：在真实 Kite 配置上以 `script_engine: taskrun` 实际执行一次任务（只读的转换/校验/
-  规划已完成；实际执行有副作用，需你运行）。
 - T10：第二真实应用未确认（项目路径与 Go 版本）。
 - 本机目录名仍是 `gookit2/kscript`：kite-go 的 `replace` 已删除，目录名不再影响构建，
   改名降级为可选的收尾动作。
+- `kite.yml`（CLI 主配置）在这台机器上不存在，`script_engine: taskrun` 的 CLI 级切换未在
+  本机验证；库/桥接层已在真实配置上真实执行过任务（见 T09）。
