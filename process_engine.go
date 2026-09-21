@@ -11,7 +11,28 @@ import (
 	"time"
 
 	"github.com/gookit/taskrun/internal/data"
+	"github.com/gookit/taskrun/internal/process"
 )
+
+// TreeKillMode selects what the default engine does when the strongest
+// available tree cleanup cannot be established.
+type TreeKillMode int
+
+const (
+	// TreeKillAuto falls back to the next available mechanism. On Windows, when
+	// the process cannot be assigned to a job object (for example because a
+	// restricted job already owns it, as on GitHub Actions runners), the engine
+	// terminates the tree by walking parent process ids instead. The tree is
+	// still terminated; only the owning mechanism differs.
+	TreeKillAuto TreeKillMode = iota
+	// TreeKillRequired fails the action instead of falling back. Use it when the
+	// strongest platform guarantee is mandatory.
+	TreeKillRequired
+)
+
+// treeControl is the platform tree control of one action. The implementation
+// lives in internal/process; the alias keeps the engine readable.
+type treeControl = process.TreeControl
 
 // ProcessEngine is the default Engine. It runs argv actions and explicit shell
 // sources as child processes, resolves programs against the effective
@@ -52,7 +73,7 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 	// releases the owning control explicitly and this releases whichever
 	// control is current. Binding the receiver here would close the owning
 	// control twice.
-	defer func() { control.release() }()
+	defer func() { control.Release() }()
 
 	cmd := exec.Command(program, args...)
 	cmd.Dir = action.Dir
@@ -61,7 +82,7 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 	} else {
 		cmd.Env = os.Environ()
 	}
-	cmd.SysProcAttr = control.sysProcAttr()
+	cmd.SysProcAttr = control.SysProcAttr()
 	cmd.Stdin = streams.Stdin
 
 	var abortOnce bool
@@ -70,7 +91,7 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 			return
 		}
 		abortOnce = true
-		control.force(cmd)
+		control.Force(cmd)
 	}
 	outWriter := newCaptureWriter(streams.Stdout, streams.CaptureLimit, killNow)
 	errWriter := newCaptureWriter(streams.Stderr, streams.CaptureLimit, killNow)
@@ -81,18 +102,18 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 		return result, &ProcessError{Kind: ErrKindStart, Err: err}
 	}
 	result.Started = true
-	if err := control.attach(cmd); err != nil {
+	if err := control.Attach(cmd); err != nil {
 		// The strongest mechanism is unavailable, for example because a
 		// restricted job already owns this process on a CI runner. TreeKillAuto
 		// switches to the parent-chain controller, which still terminates the
 		// whole tree; TreeKillRequired fails the action instead.
 		fallback, fallbackErr := e.newControl(false)
 		if e.TreeKill == TreeKillRequired || fallbackErr != nil {
-			control.force(cmd)
+			control.Force(cmd)
 			_ = cmd.Wait()
 			return result, &ProcessError{Kind: ErrKindStart, Started: true, Err: errf("process tree cleanup is unavailable: %v", err)}
 		}
-		control.release()
+		control.Release()
 		control = fallback
 	}
 
@@ -107,7 +128,7 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 			return
 		case <-ctx.Done():
 		}
-		control.graceful(cmd)
+		control.Graceful(cmd)
 		if grace > 0 {
 			timer := time.NewTimer(grace)
 			defer timer.Stop()
@@ -120,7 +141,7 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 		select {
 		case <-done:
 		default:
-			control.force(cmd)
+			control.Force(cmd)
 		}
 	}()
 
@@ -178,7 +199,7 @@ func (e ProcessEngine) newControl(useJob bool) (treeControl, error) {
 	if e.controlFactory != nil {
 		return e.controlFactory(useJob)
 	}
-	return newTreeControl(useJob)
+	return process.New(useJob)
 }
 
 func orErr(err error) error {

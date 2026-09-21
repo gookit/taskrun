@@ -394,20 +394,20 @@ type countingTree struct {
 	releases int
 }
 
-func (t *countingTree) sysProcAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{} }
+func (t *countingTree) SysProcAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{} }
 
-func (t *countingTree) attach(*exec.Cmd) error {
+func (t *countingTree) Attach(*exec.Cmd) error {
 	if t.useJob {
 		return errors.New("job object is unavailable")
 	}
 	return nil
 }
 
-func (t *countingTree) graceful(*exec.Cmd) {}
+func (t *countingTree) Graceful(*exec.Cmd) {}
 
-func (t *countingTree) force(*exec.Cmd) {}
+func (t *countingTree) Force(*exec.Cmd) {}
 
-func (t *countingTree) release() { t.releases++ }
+func (t *countingTree) Release() { t.releases++ }
 
 // TestFallbackReleasesTheOwningControlExactlyOnce is a regression test: the
 // owning control used to be released twice, because the deferred release bound
