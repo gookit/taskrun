@@ -5,6 +5,14 @@ SemVer; versions before v1 are experimental and may change the API.
 
 ## [Unreleased]
 
+### Fixed
+
+- Each process tree control is released exactly once. The deferred release was
+  bound to the owning control before the fallback replaced it, so on Windows the
+  job handle was closed twice while the fallback control was never released;
+  closing the same handle value twice can close an unrelated handle once the
+  value is reused.
+
 ### Changed
 
 - Windows tree cleanup degrades instead of failing when the owning mechanism is

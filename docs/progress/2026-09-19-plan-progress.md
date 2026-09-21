@@ -129,6 +129,28 @@ Go 1.23 工具链与 linux/darwin 交叉编译全部通过。
 
 ## 设计验收矩阵覆盖情况
 
+## 覆盖率复核与缺陷修复（2026-09-21，提交 `96709b7`）
+
+发布前用 `go test -cover` 复核覆盖率（当时 total 78.4%，主包 82.1%，formats 79.5%），
+把「低覆盖」当成「可能没测到的分支」逐条查：
+
+- 找到真实缺陷：进程树控制对象的释放。`defer control.release()` 在 defer 语句处就绑定了
+  当时的 receiver（Windows 的 Job Object 控制对象），回退分支又显式 release 一次并换成回退
+  控制对象，于是同一个 job 句柄被 `CloseHandle` 两次，而回退控制对象从未被释放。句柄值可能
+  被复用，第二次关闭会关掉无关句柄。改为 `defer func() { control.release() }()`（退出时读
+  当前值），回退分支只显式释放旧对象一次。
+- 新增 `ProcessEngine.controlFactory` 测试钩子，断言「每个创建出来的控制对象恰好释放一次」。
+  该测试在旧代码下失败（`owning control released 2 times`），修复后通过（红/绿已实测对照）。
+- 删掉同一片区域的死代码：`condEnvKeys`（无任何调用）、`captureWriter.finish`（空方法却有两处
+  调用点）、`decodeTaskCall` 里未使用的 `raw`。
+- 补上此前没测到的公开面：`RunError`/`ProcessError` 的错误文本与 `Unwrap`/`Is`、
+  `WithKillGrace`、`Runner.Source`（含返回副本的语义）、导出的 `formats.SplitCommandLine`
+  引号契约、task 调用解码（args 覆盖/继承、`forward_args`、缺 name、未知字段）、动态变量的
+  exec 与 file 动作及两种非法形状、merge 的 `env_paths` 去重。
+
+覆盖率：total 78.4% → 81.1%，主包 82.1% → 85.2%，formats 79.5% → 82.0%。
+库内仅 `windowsTaskkillTree.release` 仍显示 0%：空方法体没有语句可计，不是漏测。
+
 | ID | 场景 | 现状 |
 |---|---|---|
 | A01 | 外部 module 只导入主包执行任务 | 覆盖：`tmp/taskrun-consumer`（replace 到本地目录）编译/测试通过；另有本地 file 模块代理模拟“已发布版本”的验收，全新 module 通过版本号引入并真实运行通过，`go list -deps` 无 kite-go；真实 tag 后用真实代理复核待外部动作 |
