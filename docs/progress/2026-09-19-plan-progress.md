@@ -109,6 +109,13 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引�
 
 ## 本地开发命令
 
+设计里声明的公共边界现已全部落地：`New`/`Option`（`WithEngine`、`WithHandler`、
+`WithBaseEnv`、`WithObserver`、深度/展开/宽限/输出上限）、`Lookup`/`List`/`Source`、
+`Inspect`/`Run`、`Engine`/`Handler`/`Observer`、`Result`/`RunError`。其中
+`WithObserver` 与 `Event` 于 2026-09-21 补齐：运行/任务/步骤的 started、skipped、
+finished 事件，带 call id、深度、动作类型、有效目录、退出码与分类错误；跳过的任务只报
+`task_skipped`（附原因），Inspect/DryRun 不产生事件。
+
 测试中的平台跳过已改为按解释器/能力探测：本机（Windows + Git bash + PowerShell 7）
 只有 `TestHelperProcess`（子进程夹具）与 `TestGracefulExitIsPreferred`（POSIX 信号语义）
 会跳过，其余进程、Shell、并发、超时用例都真实执行。

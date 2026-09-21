@@ -41,5 +41,9 @@ SemVer; versions before v1 are experimental and may change the API.
   unknown-field and duplicate-key rejection, source and field-path errors,
   explicit `nearest`/`ancestors` discovery, multi-source merging and the legacy
   Kite task map converter.
+- `WithObserver` and `Event`: ordered run, task and step events (started,
+  skipped, finished) with call id, depth, action kind, effective directory, exit
+  code and the classified error. Observers cannot change scheduling, and Inspect
+  or DryRun emit nothing.
 - `cmd/taskrun` CLI consumer and `examples/basic`, `examples/config`,
   `examples/host` runnable examples.

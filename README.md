@@ -176,6 +176,25 @@ never runs a dynamic variable command: it reports those fields as deferred.
   handler business error. It never tolerates a start failure, cancellation,
   timeout, output-limit, IO or configuration error.
 
+## Observing execution
+
+```go
+runner, err := taskrun.New(def, taskrun.WithObserver(func(event taskrun.Event) {
+	log.Printf("%s task=%s step=%s depth=%d status=%s reason=%s err=%v",
+		event.Kind, event.Task, event.Step, event.Depth, event.Status, event.Reason, event.Err)
+}))
+```
+
+Events cover the run (`run_started`, `run_finished`), task calls
+(`task_started`, `task_skipped`, `task_finished`) and steps (`step_started`,
+`step_skipped`, `step_finished`), and carry the call id, action kind, effective
+directory, exit code and the classified error. A task reports `task_started` only
+when it really runs, so a skipped task reports just `task_skipped` with a reason.
+Observers cannot change scheduling and do not return errors; callbacks of one run
+arrive in order, while concurrent runs may call the observer concurrently, so the
+host should synchronize and return quickly. Inspect and DryRun emit no events,
+and events never carry captured output: read `Result` for that.
+
 ## Statuses and errors
 
 `Result.Status` is one of `succeeded`, `succeeded_with_warnings`, `failed`,

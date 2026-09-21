@@ -161,6 +161,23 @@ Deferred。
 - `ignore_error` 只容忍已启动进程的非零退出码或 Handler 业务错误，不容忍启动失败、取消、
   超时、输出上限、IO 或配置错误。
 
+## 观察执行
+
+```go
+runner, err := taskrun.New(def, taskrun.WithObserver(func(event taskrun.Event) {
+	log.Printf("%s task=%s step=%s depth=%d status=%s reason=%s err=%v",
+		event.Kind, event.Task, event.Step, event.Depth, event.Status, event.Reason, event.Err)
+}))
+```
+
+事件覆盖运行（`run_started`、`run_finished`）、任务调用（`task_started`、
+`task_skipped`、`task_finished`）与步骤（`step_started`、`step_skipped`、
+`step_finished`），并携带 call id、动作类型、有效目录、退出码与分类后的错误。只有真正
+执行的任务才会报 `task_started`，被跳过的任务只报带原因的 `task_skipped`。观察器不能改变
+调度、也没有返回值；同一次运行的回调按顺序到达，并发运行可能并发调用观察器，宿主需自行
+同步并快速返回。Inspect 与 DryRun 不产生事件，事件也不携带子进程输出，需要输出请读
+`Result`。
+
 ## 状态与错误
 
 `Result.Status` 取值为 `succeeded`、`succeeded_with_warnings`、`failed`、`canceled`、

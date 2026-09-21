@@ -27,6 +27,7 @@ type Option func(*runnerConfig) error
 type runnerConfig struct {
 	engine        Engine
 	handlers      map[string]Handler
+	observer      Observer
 	baseEnv       map[string]string
 	baseEnvSet    bool
 	maxCallDepth  int
@@ -62,6 +63,19 @@ func WithHandler(name string, handler Handler) Option {
 			c.handlers = map[string]Handler{}
 		}
 		c.handlers[name] = handler
+		return nil
+	}
+}
+
+// WithObserver registers an event observer. Observers are optional, cannot
+// change scheduling decisions and do not return errors; callbacks of one run are
+// delivered in order, while different runs may call the observer concurrently.
+func WithObserver(observer Observer) Option {
+	return func(c *runnerConfig) error {
+		if observer == nil {
+			return errf("WithObserver: observer is nil")
+		}
+		c.observer = observer
 		return nil
 	}
 }

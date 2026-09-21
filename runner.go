@@ -352,10 +352,15 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 		depth: 1,
 		dir:   s.baseDir,
 	}
+	s.emit(Event{Kind: EventRunStarted, Task: root.Name, CallID: call.id, Depth: call.depth, Dir: s.baseDir, Time: started})
 	runErr := s.runTask(ctx, call)
 	s.result.StartedAt = started
 	s.result.EndedAt = time.Now()
 	s.result.Status = s.finalStatus(runErr)
+	s.emit(Event{
+		Kind: EventRunFinished, Task: root.Name, CallID: call.id, Depth: call.depth,
+		Status: s.result.Status, Err: runErr, Time: s.result.EndedAt,
+	})
 	return s.result, runErr
 }
 
@@ -384,7 +389,7 @@ func (s *runState) finalStatus(runErr error) Status {
 
 // runTask executes one task call: platform and condition gates, dependencies,
 // then steps, each with its own deadline.
-func (s *runState) runTask(parent context.Context, call *callState) error {
+func (s *runState) runTask(parent context.Context, call *callState) (err error) {
 	s.calls++
 	if s.calls > s.r.cfg.maxExpansions {
 		return &RunError{Kind: ErrKindExpansionLimit, Task: call.task.Name, CallID: call.id,
@@ -398,10 +403,28 @@ func (s *runState) runTask(parent context.Context, call *callState) error {
 	}
 	startedAt := time.Now()
 	task := call.task
+	// Task started/skipped/finished events are emitted on every exit path.
+	skipped := false
+	defer func() {
+		if skipped {
+			return
+		}
+		status := StatusSucceeded
+		if err != nil {
+			status = statusForKind(kindOf(err))
+		}
+		s.emit(Event{
+			Kind: EventTaskFinished, Task: task.Name, CallID: call.id, Depth: call.depth,
+			Status: status, Dir: call.dir, Err: err, Time: time.Now(),
+		})
+	}()
 	if !platformMatches(task.Platform, runtime.GOOS) {
 		s.skipped = s.skipped || call.depth == 1
-		record(StatusSkipped, fmt.Sprintf("platform %s not in %v", runtime.GOOS, task.Platform), nil, startedAt)
+		reason := fmt.Sprintf("platform %s not in %v", runtime.GOOS, task.Platform)
+		record(StatusSkipped, reason, nil, startedAt)
 		s.note("task %s skipped: platform %s", task.Name, runtime.GOOS)
+		skipped = true
+		s.emit(Event{Kind: EventTaskSkipped, Task: task.Name, CallID: call.id, Depth: call.depth, Status: StatusSkipped, Reason: reason, Dir: call.dir, Time: time.Now()})
 		return nil
 	}
 	ctx, cancel := withBudget(parent, task.Timeout)
@@ -429,8 +452,12 @@ func (s *runState) runTask(parent context.Context, call *callState) error {
 		s.skipped = s.skipped || call.depth == 1
 		record(StatusSkipped, "condition false", nil, startedAt)
 		s.note("task %s skipped: condition false", task.Name)
+		skipped = true
+		s.emit(Event{Kind: EventTaskSkipped, Task: task.Name, CallID: call.id, Depth: call.depth, Status: StatusSkipped, Reason: "condition false", Dir: call.dir, Time: time.Now()})
 		return nil
 	}
+	// started means the call really runs its dependencies and steps.
+	s.emit(Event{Kind: EventTaskStarted, Task: task.Name, CallID: call.id, Depth: call.depth, Dir: call.dir, Time: time.Now()})
 	for _, dep := range task.Deps {
 		child, err := s.childCall(call, dep, call.args)
 		if err != nil {
@@ -559,13 +586,43 @@ func (s *runState) newStepScope(ctx context.Context, call *callState, taskScope 
 }
 
 // runStep evaluates and executes a single step.
-func (s *runState) runStep(parent context.Context, call *callState, taskScope *varScope, index int, step Step) error {
+func (s *runState) runStep(parent context.Context, call *callState, taskScope *varScope, index int, step Step) (err error) {
 	ctx, cancel := withBudget(parent, step.Timeout)
 	defer cancel()
 	label := stepLabel(step, index)
+	actionKind := step.actionKind()
+	skipped := false
+	defer func() {
+		if skipped {
+			return
+		}
+		// The recorded step result is authoritative, so ignored failures and
+		// handler results keep their status.
+		status := StatusSucceeded
+		var exitCode *int
+		var stepErr error
+		if last := s.lastStepResult(call.id, label); last != nil {
+			status = last.Status
+			exitCode = last.ExitCode
+			stepErr = last.Err
+		}
+		if err != nil {
+			status = statusForKind(kindOf(err))
+			stepErr = err
+		}
+		s.emit(Event{
+			Kind: EventStepFinished, Task: call.task.Name, CallID: call.id, Step: label,
+			ActionKind: actionKind, Depth: call.depth, Status: status, ExitCode: exitCode,
+			Err: stepErr, Time: time.Now(),
+		})
+	}()
 	if !platformMatches(step.Platform, runtime.GOOS) {
+		reason := fmt.Sprintf("platform %s not in %v", runtime.GOOS, step.Platform)
 		s.recordStep(call, step, StepResult{Status: StatusSkipped, Err: nil})
 		s.note("task %s step %s skipped: platform %s", call.task.Name, label, runtime.GOOS)
+		skipped = true
+		s.emit(Event{Kind: EventStepSkipped, Task: call.task.Name, CallID: call.id, Step: label,
+			ActionKind: actionKind, Depth: call.depth, Status: StatusSkipped, Reason: reason, Time: time.Now()})
 		return nil
 	}
 	scope, err := s.newStepScope(ctx, call, taskScope, index, step)
@@ -588,9 +645,14 @@ func (s *runState) runStep(parent context.Context, call *callState, taskScope *v
 	if !ok {
 		s.recordStep(call, step, StepResult{Status: StatusSkipped})
 		s.note("task %s step %s skipped: condition false", call.task.Name, scope.step)
+		skipped = true
+		s.emit(Event{Kind: EventStepSkipped, Task: call.task.Name, CallID: call.id, Step: label,
+			ActionKind: actionKind, Depth: call.depth, Status: StatusSkipped, Reason: "condition false", Time: time.Now()})
 		return nil
 	}
-	switch step.actionKind() {
+	s.emit(Event{Kind: EventStepStarted, Task: call.task.Name, CallID: call.id, Step: label,
+		ActionKind: actionKind, Depth: call.depth, Time: time.Now()})
+	switch actionKind {
 	case "task":
 		return s.runTaskCall(ctx, call, scope, step)
 	case "host":
@@ -923,6 +985,37 @@ func (s *runState) classify(err error, call *callState, step string, fallback Er
 		out.CallID = call.id
 	}
 	return out
+}
+
+// lastStepResult returns the recorded result of the most recent step with the
+// given call and label, which is the authoritative status for events.
+func (s *runState) lastStepResult(callID, label string) *StepResult {
+	for i := len(s.result.Steps) - 1; i >= 0; i-- {
+		step := s.result.Steps[i]
+		if step.CallID == callID && step.Name == label {
+			return &s.result.Steps[i]
+		}
+	}
+	return nil
+}
+
+func kindOf(err error) ErrorKind {
+	var runErr *RunError
+	if errors.As(err, &runErr) {
+		return runErr.Kind
+	}
+	var procErr *ProcessError
+	if errors.As(err, &procErr) {
+		return procErr.Kind
+	}
+	switch {
+	case errors.Is(err, context.Canceled):
+		return ErrKindCanceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return ErrKindTimedOut
+	default:
+		return ErrKindExit
+	}
 }
 
 func fallbackCause(err error, fallback ErrorKind) error { return err }
