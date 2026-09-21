@@ -61,6 +61,8 @@ cd ../../tmp/taskrun-consumer && go test -count=1 ./...   # 通过；go list -de
 # 结果（2026-09-21）：模块 zip 被接受并解析为 v0.1.0-rc-local；go list -deps 无 kite-go；
 # 程序输出 “status=succeeded tasks=2 steps=4”，并断言了冻结定义、跳过步骤、ErrNotFound、
 # ErrExit 与 handler 参数。唯一未做的只是真实 tag 之后用真实代理复核一次。
+# 同一验收模块把 go 指令降到 1.23 并用 GOTOOLCHAIN=go1.23.12 重跑：go mod tidy、build、
+# run 全部通过，说明声明 go 1.23 的消费者能真实使用该模块，不只是库自身能编译。
 
 # Kite 侧（迁移状态）
 cd ../../inhere-tools/kite-go && go build ./...
