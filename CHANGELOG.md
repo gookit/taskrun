@@ -3,7 +3,7 @@
 All notable changes to this module are documented here. The module follows
 SemVer; versions before v1 are experimental and may change the API.
 
-## [Unreleased]
+## [v0.2.0] - 2026-09-21
 
 ### Fixed
 
