@@ -51,9 +51,32 @@ git push -u origin main
 
 ## 3. 打 tag 发布 v0.1.0
 
+打 tag 之前先收尾 CHANGELOG 的版本标题（当前是 `## [Unreleased]`）：
+
+```bash
+# 把 CHANGELOG.md 里的
+#   ## [Unreleased]
+# 改成
+#   ## [v0.1.0] - 2026-09-21
+git commit -am "docs: mark v0.1.0 in the changelog"
+```
+
+发布说明由组织模板的 `Tag-release`（`release.yml`）自动生成：它在 tag 推送后拉取
+`chlog`，按 `.github/changelog.yml` 的规则**从 commit 标题**分组（`fix:` → Fixed、
+`feat:`/`new:` → Feature、`up:`/`update:` → Update、`refactor:`/`break:` → Refactor，
+其余进 Other），并过滤长度不足的标题。本仓库历史里 `style:`、`docs:`、`chore:` 标题会落到
+Other 分组，属正常；人读的完整清单以 `CHANGELOG.md` 为准。
+
 ```bash
 git tag -a v0.1.0 -m "taskrun v0.1.0"
 git push origin v0.1.0
+```
+
+推送 tag 后确认发布动作：
+
+```bash
+gh run list --workflow=release.yml --limit 3
+gh release view v0.1.0
 ```
 
 发布前建议先在 Linux 或装了 C 工具链的机器上跑一次 race：
