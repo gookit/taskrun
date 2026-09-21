@@ -1,9 +1,18 @@
 # taskrun
 
+[![Go mod version](https://img.shields.io/github/go-mod/go-version/gookit/taskrun?style=flat-square)](https://github.com/gookit/taskrun)
+[![Actions Status](https://github.com/gookit/taskrun/workflows/action-tests/badge.svg)](https://github.com/gookit/taskrun/actions)
+[![GoDoc](https://pkg.go.dev/badge/github.com/gookit/taskrun.svg)](https://pkg.go.dev/github.com/gookit/taskrun?tab=overview)
+[![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/gookit/taskrun)](https://github.com/gookit/taskrun)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gookit/taskrun)](https://goreportcard.com/report/github.com/gookit/taskrun)
+[![License](https://img.shields.io/github/license/gookit/taskrun)](https://github.com/gookit/taskrun/blob/main/LICENSE)
+
 `github.com/gookit/taskrun` is an embeddable Go task and script runner. A Go 1.23+
 application can load a task definition, inspect the plan, run tasks and script
 files, and get an isolated, cancelable, classified result without initializing a
 CLI framework or any global state.
+
+> **[中文说明](README.zh-CN.md)**
 
 ## Quick start
 

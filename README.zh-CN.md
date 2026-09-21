@@ -1,8 +1,15 @@
 # taskrun
 
+[![Go mod version](https://img.shields.io/github/go-mod/go-version/gookit/taskrun?style=flat-square)](https://github.com/gookit/taskrun)
+[![Actions Status](https://github.com/gookit/taskrun/workflows/action-tests/badge.svg)](https://github.com/gookit/taskrun/actions)
+[![GoDoc](https://pkg.go.dev/badge/github.com/gookit/taskrun.svg)](https://pkg.go.dev/github.com/gookit/taskrun?tab=overview)
+[![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/gookit/taskrun)](https://github.com/gookit/taskrun)
+
 `github.com/gookit/taskrun` 是可嵌入 Go 应用的任务与脚本执行库。Go 1.23+ 应用无需初始化
 CLI 框架或全局状态，即可加载任务定义、查看执行计划、运行任务与脚本文件，并获得隔离、
 可取消、可分类的结构化结果。
+
+> **[English](README.md)**
 
 ## 快速开始
 

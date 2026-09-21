@@ -182,13 +182,14 @@ func TestZeroTimeoutInheritsParentBudget(t *testing.T) {
 // owned descendant running: the grandchild would create the marker file only
 // after 2 seconds, which must never happen once the tree is killed.
 func TestProcessTreeIsKilled(t *testing.T) {
-	marker := filepath.Join(t.TempDir(), "marker")
-	script := treeScript(marker)
-	if script == "" {
-		t.Skip("no shell fixture for this platform")
-	}
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker")
+	script := writeTreeScript(t, dir, marker)
 	r := newTestRunner(t, Definition{
-		Tasks: map[string]Task{"t": {Steps: []Step{{Shell: &ShellSpec{Name: shellForTest(), Script: script}}}}},
+		Tasks: map[string]Task{"t": {Steps: []Step{{
+			Dir:   dir,
+			Shell: &ShellSpec{Name: shellForTest(), Script: script},
+		}}}},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -198,7 +199,9 @@ func TestProcessTreeIsKilled(t *testing.T) {
 	if _, err := r.Run(ctx, Request{Task: "t"}); err == nil {
 		t.Fatal("expected cancellation")
 	}
-	time.Sleep(2500 * time.Millisecond)
+	// The descendant writes the marker about three seconds in; wait past that so
+	// an escaped process is detected.
+	time.Sleep(4 * time.Second)
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatalf("descendant process survived cancellation and wrote %s", marker)
 	}
@@ -331,11 +334,20 @@ func shellForTest() string {
 	return "sh"
 }
 
-// treeScript returns a script whose background descendant would create marker
-// after two seconds while the foreground process keeps the action alive.
-func treeScript(marker string) string {
+// writeTreeScript prepares a script whose background descendant writes marker
+// about three seconds in, while the foreground process stays alive for longer.
+// On Windows the descendant is started from a batch file so no nested command
+// line quoting is involved.
+func writeTreeScript(t *testing.T, dir, marker string) string {
+	t.Helper()
 	if runtime.GOOS == "windows" {
-		return `start /b cmd /c "ping -n 3 127.0.0.1 >NUL & echo x > "` + marker + `"" & ping -n 8 127.0.0.1 >NUL`
+		body := "@echo off\r\n" +
+			"start /b cmd /c \"ping -n 4 127.0.0.1 >NUL & echo x > \"" + marker + "\"\"\r\n" +
+			"ping -n 12 127.0.0.1 >NUL\r\n"
+		if err := os.WriteFile(filepath.Join(dir, "tree.cmd"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return "tree.cmd"
 	}
-	return `( sleep 2 && touch '` + marker + `' ) & sleep 8`
+	return `( sleep 3 && touch '` + marker + `' ) & sleep 12`
 }

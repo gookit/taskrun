@@ -4,6 +4,7 @@ package taskrun
 
 import (
 	"os/exec"
+	"strconv"
 	"syscall"
 	"unsafe"
 )
@@ -122,10 +123,20 @@ func (t *windowsTree) graceful(cmd *exec.Cmd) {
 }
 
 func (t *windowsTree) force(cmd *exec.Cmd) {
-	if t.handle == 0 {
+	if t.handle != 0 {
+		_, _, _ = procTerminateJobObject.Call(uintptr(t.handle), 1)
+	}
+	if cmd.Process == nil {
 		return
 	}
-	_, _, _ = procTerminateJobObject.Call(uintptr(t.handle), 1)
+	// Belt and braces: a descendant created in the short window between
+	// CreateProcess and AssignProcessToJobObject is not owned by the job, so the
+	// tree is also killed by walking parent process ids. taskkill walks the live
+	// parent chain, which still contains such a descendant while the direct child
+	// is alive.
+	kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid))
+	kill.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = kill.Run()
 }
 
 func (t *windowsTree) release() {
