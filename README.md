@@ -227,3 +227,14 @@ Go 1.23 or newer, MIT licensed. Supported runtime platforms are Windows, Linux
 and macOS; shell selection is explicit and shell sources are not portable across
 platforms by assumption. The module depends on `expr-lang/expr`,
 `goccy/go-yaml` and `BurntSushi/toml` only.
+
+## Development
+
+```bash
+make check        # gofmt check, build, vet and tests
+make test-go123   # run the tests with the declared minimum Go version
+make test-race    # needs cgo and a C compiler
+make cross        # linux and darwin builds
+make cli          # run the example CLI against examples/basic.json
+make examples     # run the Go examples
+```

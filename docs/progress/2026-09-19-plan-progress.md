@@ -98,8 +98,34 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引�
 
 ## 下一步
 
-1. T09 剩余：在真实 Kite 配置上以 `script_engine: taskrun` 实际执行一次任务（只读的转换/校验/规划已完成，
+1. 外部动作（命令已备好，见 `docs/release/2026-09-21-publish-checklist.md`）：
+   本机目录改名、创建 `gookit/taskrun` 远端并推送、打 `v0.1.0` tag、把 kite-go 的临时 replace
+   换成真实版本、工作区外 consumer 正式验收。
+2. T09 剩余：在真实 Kite 配置上以 `script_engine: taskrun` 实际执行一次任务（只读的转换/校验/规划已完成，
    执行会产生副作用，需由你在自己的机器上触发）。
-2. T10：确认第二真实应用并接入；在真实 runner 上执行 Go 1.23/1.25 与 race 矩阵。
+3. T10：确认第二真实应用并接入；在真实 runner 上执行 Go 1.23/1.25 与 race 矩阵。
 3. T11 剩余（均需外部动作授权）：创建远端仓库、推送、打 `v0.1.0` tag、发布；
    之后把 `kite-go/go.mod` 的临时 replace 换成真实版本号并做工作区外验收。
+
+## 本地开发命令
+
+模块内提供 `Makefile`（已在 Windows + GNU make 上实测）：
+
+```bash
+make check        # gofmt 检查 + build + vet + test
+make test-go123   # 用 go1.23.12 工具链跑测试
+make test-race    # 需要 CGO 与 C 编译器（本机没有，故未运行）
+make cross        # linux / darwin 构建
+make cli          # 跑示例 CLI
+make examples     # 跑 Go 示例
+```
+
+## 模块改名（2026-09-21）
+
+模块由 `github.com/gookit/kscript` 改名为 `github.com/gookit/taskrun`（主包 `taskrun`）。
+原因：`k` 是 Kite 遗留前缀，且与 kite-go 旧包 `pkg/kscript` 同名会导致 import 别名。
+改名范围：模块路径、包名、`taskrun.go`/`cmd/taskrun`、错误前缀、README/CHANGELOG/全部文档、
+kite-go 侧的 require+replace 与桥接导入（别名 `kscript2` 已删除）、引擎开关值
+`script_engine: taskrun`、工作区外 consumer。
+设计文档升到 Draft 0.3（含 D01 更新），计划升到 0.3。
+本机目录名仍为 `gookit2/kscript`（被工作区文件锁阻塞，未强改）。

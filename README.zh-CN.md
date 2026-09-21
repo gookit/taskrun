@@ -203,3 +203,14 @@ def, err = formats.LoadFiles(files, false)           // false 表示冲突即报
 Go 1.23 及以上，MIT 许可。运行平台支持 Windows、Linux、macOS；Shell 必须显式指定，库不
 假设同一份 Shell 源码跨平台等价。依赖仅 `expr-lang/expr`、`goccy/go-yaml`、
 `BurntSushi/toml`。
+
+## 开发命令
+
+```bash
+make check        # gofmt 检查、build、vet、测试
+make test-go123   # 用声明的最低 Go 版本跑测试
+make test-race    # 需要 cgo 与 C 编译器
+make cross        # linux 与 darwin 构建
+make cli          # 用 examples/basic.json 跑示例 CLI
+make examples     # 运行 Go 示例
+```
