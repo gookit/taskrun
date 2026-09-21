@@ -13,9 +13,7 @@ import (
 )
 
 func TestEngineCapturesAndForwardsOutput(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	var forwarded strings.Builder
 	r := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "printf abcdef"}}}}},
@@ -30,9 +28,7 @@ func TestEngineCapturesAndForwardsOutput(t *testing.T) {
 }
 
 func TestEngineCopiesFiveHundredKilobytesBounded(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	var forwarded strings.Builder
 	r := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "yes 0123456789 | head -c 500000"}}}}},
@@ -51,9 +47,7 @@ func TestEngineCopiesFiveHundredKilobytesBounded(t *testing.T) {
 }
 
 func TestEngineSeparatesStderr(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	r := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "printf out; printf err >&2"}}}}},
 	})
@@ -74,9 +68,7 @@ func (w *failingWriter) Write(p []byte) (int, error) {
 }
 
 func TestWriterErrorTerminatesAction(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	r := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "i=0; while [ $i -lt 200 ]; do printf 'line line line line\n'; i=$((i+1)); done"}}}}},
 	})
@@ -280,38 +272,8 @@ func TestMissingProgramIsStartError(t *testing.T) {
 	}
 }
 
-func TestShellSelectionIsExplicit(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		r := newTestRunner(t, Definition{
-			Tasks: map[string]Task{"t": {Steps: []Step{{Shell: &ShellSpec{Name: "cmd", Script: "echo hi"}}}}},
-		})
-		result := mustRun(t, r, Request{Task: "t", IO: IO{CaptureLimit: 64}})
-		if !strings.Contains(string(result.Steps[0].Output), "hi") {
-			t.Fatalf("output=%q", result.Steps[0].Output)
-		}
-		return
-	}
-	r := newTestRunner(t, Definition{
-		Tasks: map[string]Task{"t": {Steps: []Step{{Shell: &ShellSpec{Name: "sh", Script: "printf hi"}}}}},
-	})
-	result := mustRun(t, r, Request{Task: "t", IO: IO{CaptureLimit: 64}})
-	if string(result.Steps[0].Output) != "hi" {
-		t.Fatalf("output=%q", result.Steps[0].Output)
-	}
-	// The requested shell is used rather than a platform default.
-	r2 := newTestRunner(t, Definition{
-		Tasks: map[string]Task{"t": {Steps: []Step{{Shell: &ShellSpec{Name: "bash", Script: "printf bash-ok"}}}}},
-	})
-	result2 := mustRun(t, r2, Request{Task: "t", IO: IO{CaptureLimit: 64}})
-	if string(result2.Steps[0].Output) != "bash-ok" {
-		t.Fatalf("bash output=%q", result2.Steps[0].Output)
-	}
-}
-
 func TestShellScriptIsRendered(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	r := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {
 			Vars:  map[string]any{"target": "rendered"},
@@ -331,9 +293,7 @@ func TestNoGlobalProcessStateLeak(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	r := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {
 			Env:   map[string]string{"KS_LEAK": "1"},

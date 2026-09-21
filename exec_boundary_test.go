@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -103,9 +102,7 @@ func TestFileActionUsesRegisteredInterpreter(t *testing.T) {
 }
 
 func TestShellPrefixArgsAreApplied(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("posix shell fixture")
-	}
+	requireShell(t, "sh")
 	dir := t.TempDir()
 	runner := newTestRunner(t, Definition{
 		BaseDir: dir,

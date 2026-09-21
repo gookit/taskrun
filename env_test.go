@@ -3,7 +3,6 @@ package taskrun
 import (
 	"context"
 	"errors"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -46,9 +45,7 @@ func TestEnvValuesAreRendered(t *testing.T) {
 }
 
 func TestEnvValuesReachTheChildProcess(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	runner := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {
 			Vars:  map[string]any{"target": "rendered-env"},

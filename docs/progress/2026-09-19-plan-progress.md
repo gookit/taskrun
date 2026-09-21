@@ -74,7 +74,7 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引�
 | A04 | 菱形依赖与重复调用 | 覆盖（`TestDiamondDependencyRunsTwice`） |
 | A05 | 条件 true/false/空/类型错误/平台 | 覆盖 |
 | A06 | 参数空格、引号、空串、Windows 路径 | 覆盖（`TestExecKeepsArgumentBoundaries` 逐字节校验 argv） |
-| A07 | go run / sh / cmd / pwsh 解释器 | 基本覆盖（`file` 动作走 `go run`、`sh`/`bash`/`cmd` 与 prefix_args 有测试；pwsh 依赖 runner 是否安装） |
+| A07 | go run / sh / cmd / pwsh 解释器 | 覆盖：`TestShellArgumentContract` 固定各 shell 的调用契约（含 `zsh`），`TestShellSelectionIsExplicit` 在装有解释器的主机上真实执行 `sh`/`bash`/`pwsh`/`powershell`/`cmd`（本机 2026-09-21 实测五个全部通过），`file` 动作走 `go run` 与 `prefix_args` 另有测试 |
 | A08 | vars/env 优先级、CleanEnv、PATH、动态变量 | 覆盖 |
 | A09 | dry-run 零副作用与 Deferred | 覆盖 |
 | A10 | 并发 Run 隔离 | 覆盖（并发用例通过；race 检测受限） |
@@ -108,6 +108,10 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引�
    之后把 `kite-go/go.mod` 的临时 replace 换成真实版本号并做工作区外验收。
 
 ## 本地开发命令
+
+测试中的平台跳过已改为按解释器/能力探测：本机（Windows + Git bash + PowerShell 7）
+只有 `TestHelperProcess`（子进程夹具）与 `TestGracefulExitIsPreferred`（POSIX 信号语义）
+会跳过，其余进程、Shell、并发、超时用例都真实执行。
 
 模块内提供 `Makefile`（已在 Windows + GNU make 上实测）：
 

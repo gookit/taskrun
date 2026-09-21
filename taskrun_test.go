@@ -480,9 +480,7 @@ func TestDirResolution(t *testing.T) {
 }
 
 func TestIgnoreErrorToleratesExitCodeOnly(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix exit code fixture")
-	}
+	requireShell(t, "sh")
 	r := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {Steps: []Step{
 			{IgnoreError: true, Shell: &ShellSpec{Name: "sh", Script: "exit 3"}},
@@ -613,9 +611,7 @@ func TestConcurrentRunsAreIsolated(t *testing.T) {
 }
 
 func TestDynamicVarIsEvaluatedOnceAndTrimmed(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	var runs int
 	counting := &countingEngine{inner: ProcessEngine{}, runs: &runs}
 	var seen any
@@ -638,9 +634,7 @@ func TestDynamicVarIsEvaluatedOnceAndTrimmed(t *testing.T) {
 }
 
 func TestDynamicVarOutputLimitFails(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses a unix shell fixture")
-	}
+	requireShell(t, "sh")
 	r := newTestRunner(t, Definition{
 		Tasks: map[string]Task{"t": {
 			DynamicVars: map[string]DynamicVar{"big": {Shell: &ShellSpec{Name: "sh", Script: "printf '%0.sx' 1 2 3 4 5 6 7 8"}}},
