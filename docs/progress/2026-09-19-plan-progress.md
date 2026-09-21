@@ -27,7 +27,7 @@
 | T04 变量、表达式与条件 | 完成 | `render.go`、`condition.go`；命名空间模板与未知引用报错、静态变量拓扑求值与环拒绝、动态变量按需求值一次、`Inspect` 标记 Deferred |
 | T05 顺序图与运行状态 | 完成 | `graph.go`、`runner.go`；`New` 全图预检（环路径/深度）、运行期展开上限、每次调用独立 Vars/Env/Dir/deadline、`TaskResult` 记录跳过原因 |
 | T06 进程/Shell/file/host 引擎 | 基本完成 | `process_engine.go`；显式 Shell 选择、argv 不二次分词、file 走注册表解释器、dry-run 零副作用、错误分类 |
-| T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object、宽限期、能力不可用即失败、`Canceled`/`TimedOut` 分类 |
+| T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object（受限宿主被拒时按 `TreeKillAuto` 退化为父进程链终止整棵树，`TreeKillRequired` 保留严格失败，见设计修订 0.4）、宽限期、`Canceled`/`TimedOut` 分类 |
 | T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
 | T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器（含 ParseEnv 的 `${env.*}` 重写）+ `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；任务级、配置级双引擎对照均通过；仓库真实配置（`config/module/scripts.yml`，8 个任务）转换、校验与规划全部通过、0 warning；列表/搜索/`--show` 有意保留旧实现；仅剩“用真实配置实际执行任务”（有副作用，需你运行） |
 | T10 第二应用与 Go 版本矩阵 | 部分 | 仓库已建（`gookit/taskrun`）并推送，CI 已在真实 runner 上跑（`go.yml`：ubuntu × Go 1.23/1.24/1.25/stable；`race-and-windows.yml`：ubuntu `-race` + windows 构建与测试）；第二真实应用仍未确认，`tmp/taskrun-consumer` 使用 `replace` |
@@ -91,6 +91,8 @@ GitHub Actions 的 Windows runner 已经把它自己的 Job Object 套在步骤�
 - 进程树测试拆成两个子用例（拥有机制 / 父进程链回退），两条路径都真实执行并通过；
   另加 `TestTreeKillRequiredFailsWithoutTheOwningMechanism` 覆盖严格模式。
 - Linux 侧不受影响：进程组始终可用（race job 已连续两次通过）。
+- 该行为属于语义变更，已按规范记入设计修订（`docs/design/2026-09-15-kscript-library-design.md`
+  修订 0.4 与决策 D11），不是静默改行为。
 - 第二真实应用接入与结果记录（T10）。
 
 ## 设计验收矩阵覆盖情况
