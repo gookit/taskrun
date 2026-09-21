@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -349,16 +348,6 @@ func checkJSONDuplicateKeys(data []byte) error {
 		return fmt.Errorf("unexpected trailing data")
 	}
 	return nil
-}
-
-// sortedKeys returns object keys in a stable order for deterministic messages.
-func sortedKeys(in map[string]any) []string {
-	keys := make([]string, 0, len(in))
-	for key := range in {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 // withinBase reports whether path stays inside base.

@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/expr-lang/expr"
+
+	"github.com/gookit/taskrun/internal/data"
 )
 
 // conditionEvaluator is a compiled condition. An empty condition is always true.
@@ -19,7 +21,7 @@ func compileCondition(source string, rv renderVars) (conditionEvaluator, error) 
 		return func() (bool, error) { return true, nil }, nil
 	}
 	env := map[string]any{}
-	varsCopy := cloneDataMap(rv.Vars)
+	varsCopy := data.CloneMap(rv.Vars)
 	if referencesAny(source, rv.DeferredNames) {
 		if rv.Dynamic == nil {
 			return nil, errDeferred

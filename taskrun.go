@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/gookit/taskrun/internal/data"
 )
 
 // Default limits applied by New unless an Option overrides them.
@@ -97,7 +99,7 @@ func WithBaseEnv(env map[string]string) Option {
 				return errf("WithBaseEnv: empty variable name")
 			}
 		}
-		c.baseEnv = cloneStringMap(env)
+		c.baseEnv = data.CloneStringMap(env)
 		c.baseEnvSet = true
 		return nil
 	}
@@ -210,7 +212,7 @@ func (r *Runner) List() []Task {
 	for name := range r.def.Tasks {
 		names = append(names, name)
 	}
-	sortStrings(names)
+	data.SortStrings(names)
 	out := make([]Task, 0, len(names))
 	for _, name := range names {
 		out = append(out, cloneTask(r.def.Tasks[name]))

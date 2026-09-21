@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/gookit/taskrun/internal/data"
 )
 
 type executionMode int
@@ -86,7 +88,7 @@ func (v *varScope) deferredNames() []string {
 	for name := range v.dyn {
 		names = append(names, name)
 	}
-	sortStrings(names)
+	data.SortStrings(names)
 	return names
 }
 
@@ -104,7 +106,7 @@ func (v *varScope) renderVars() renderVars {
 
 // visibleVars returns static plus already resolved dynamic values for handlers.
 func (v *varScope) visibleVars() map[string]any {
-	return mergeDataMaps(v.vars, v.values)
+	return data.Merge(v.vars, v.values)
 }
 
 type runState struct {
@@ -133,7 +135,7 @@ func newRunState(ctx context.Context, r *Runner, req Request, mode executionMode
 		mode: mode,
 		ctx:  ctx,
 		req:  req,
-		host: cloneDataMap(req.HostData),
+		host: data.CloneMap(req.HostData),
 		result: &Result{
 			Task: req.Task,
 		},
@@ -155,7 +157,7 @@ func newRunState(ctx context.Context, r *Runner, req Request, mode executionMode
 	if err != nil {
 		return nil, err
 	}
-	s.defVars = mergeDataMaps(vars, req.Vars)
+	s.defVars = data.Merge(vars, req.Vars)
 	// Environment values may reference variables, so they are rendered once the
 	// definition variables are known.
 	view := baseView
@@ -196,7 +198,7 @@ func (s *runState) nextCallID(name string) string {
 // defaults for a task with CleanEnv.
 func (s *runState) visibleEnv(cleanEnv bool) map[string]string {
 	if cleanEnv {
-		return cloneStringMap(s.defEnv)
+		return data.CloneStringMap(s.defEnv)
 	}
 	return mergeStringMaps(s.r.cfg.baseEnv, s.defEnv)
 }
@@ -215,7 +217,7 @@ func (s *runState) composeEnv(cleanEnv bool, taskEnv, stepEnv, reqEnv map[string
 	if len(paths) > 0 {
 		existing, _ := lookupEnv(out, "PATH")
 		for key := range out {
-			if envKey(key) == envKey("PATH") {
+			if data.EnvKey(key) == data.EnvKey("PATH") {
 				delete(out, key)
 			}
 		}
@@ -247,7 +249,7 @@ func (s *runState) envView(call *callState, dir string, vars map[string]any, vis
 	for name := range dyn {
 		names = append(names, name)
 	}
-	sortStrings(names)
+	data.SortStrings(names)
 	view.DeferredNames = names
 	view.Dynamic = func(name string) (any, bool, error) {
 		if _, declared := dyn[name]; !declared {
@@ -266,7 +268,7 @@ func (s *runState) renderEnvMap(env map[string]string, view renderVars) (map[str
 		return nil, nil
 	}
 	out := make(map[string]string, len(env))
-	for _, key := range sortedKeys(env) {
+	for _, key := range data.SortedKeys(env) {
 		value, err := renderTemplate(env[key], view)
 		if err != nil {
 			if errors.Is(err, errDeferred) && s.mode == modeInspect {
@@ -348,7 +350,7 @@ func (r *Runner) Run(ctx context.Context, req Request) (*Result, error) {
 	call := &callState{
 		id:    s.nextCallID(root.Name),
 		task:  root,
-		args:  cloneStrings(req.Args),
+		args:  data.CloneStrings(req.Args),
 		depth: 1,
 		dir:   s.baseDir,
 	}
@@ -487,7 +489,7 @@ func (s *runState) childCall(parent *callState, name string, args []string) (*ca
 	return &callState{
 		id:    s.nextCallID(name),
 		task:  cloneTask(task),
-		args:  cloneStrings(args),
+		args:  data.CloneStrings(args),
 		depth: parent.depth + 1,
 		dir:   s.baseDir,
 	}, nil
@@ -509,7 +511,7 @@ func (s *runState) newTaskScope(ctx context.Context, call *callState) (*varScope
 		dir:    dir,
 		args:   call.args,
 		run:    s.runMeta(task.Name, call.id, dir),
-		vars:   mergeDataMaps(s.defVars),
+		vars:   data.Merge(s.defVars),
 		dyn:    task.DynamicVars,
 		env:    visible,
 	}
@@ -519,7 +521,7 @@ func (s *runState) newTaskScope(ctx context.Context, call *callState) (*varScope
 	if err != nil {
 		return nil, err
 	}
-	scope.vars = mergeDataMaps(s.defVars, vars)
+	scope.vars = data.Merge(s.defVars, vars)
 	envView := s.envView(call, dir, scope.vars, visible, scope.dyn)
 	taskEnv, err := s.renderEnvMap(task.Env, envView)
 	if err != nil {
@@ -565,7 +567,7 @@ func (s *runState) newStepScope(ctx context.Context, call *callState, taskScope 
 	if err != nil {
 		return nil, err
 	}
-	scope.vars = mergeDataMaps(taskScope.vars, vars)
+	scope.vars = data.Merge(taskScope.vars, vars)
 	envView := s.envView(call, dir, scope.vars, taskScope.env, scope.dyn)
 	stepEnv, err := s.renderEnvMap(step.Env, envView)
 	if err != nil {
@@ -679,7 +681,7 @@ func (s *runState) runTaskCall(ctx context.Context, call *callState, scope *varS
 		args = rendered
 	}
 	if step.Task.ForwardArgs {
-		args = append(cloneStrings(args), s.req.Args...)
+		args = append(data.CloneStrings(args), s.req.Args...)
 	}
 	child, err := s.childCall(call, step.Task.Name, args)
 	if err != nil {
@@ -705,7 +707,7 @@ func (s *runState) runHost(ctx context.Context, call *callState, scope *varScope
 	if s.mode == modeInspect {
 		s.planAction(PlannedAction{
 			Task: call.task.Name, CallID: call.id, Step: scope.step, Kind: "host",
-			Program: step.Host.Name, Dir: scope.dir, EnvKeys: sortedKeys(scope.env), Status: StatusPlanned,
+			Program: step.Host.Name, Dir: scope.dir, EnvKeys: data.SortedKeys(scope.env), Status: StatusPlanned,
 		})
 		return nil
 	}
@@ -719,13 +721,13 @@ func (s *runState) runHost(ctx context.Context, call *callState, scope *varScope
 			args[i] = rendered
 			continue
 		}
-		args[i] = cloneData(arg)
+		args[i] = data.Clone(arg)
 	}
 	hostCall := HostCall{
 		Name: step.Host.Name,
 		Args: args,
 		Vars: scope.visibleVars(),
-		Env:  cloneStringMap(scope.env),
+		Env:  data.CloneStringMap(scope.env),
 		Dir:  scope.dir,
 	}
 	result, err := invokeHandler(ctx, handler, hostCall)
@@ -769,7 +771,7 @@ func (s *runState) runExternal(ctx context.Context, call *callState, scope *varS
 		s.planAction(PlannedAction{
 			Task: call.task.Name, CallID: call.id, Step: scope.step, Kind: action.Kind,
 			Program: action.Program, Args: action.Args, Script: action.Script,
-			Dir: action.Dir, EnvKeys: sortedKeys(scope.env), Status: StatusPlanned,
+			Dir: action.Dir, EnvKeys: data.SortedKeys(scope.env), Status: StatusPlanned,
 		})
 		return nil
 	}
@@ -817,7 +819,7 @@ func statusForKind(kind ErrorKind) Status {
 // prepareAction renders and validates an external action.
 func (s *runState) prepareAction(scope *varScope, step Step) (PreparedAction, error) {
 	rv := scope.renderVars()
-	action := PreparedAction{Dir: scope.dir, Env: envList(scope.env)}
+	action := PreparedAction{Dir: scope.dir, Env: data.EnvList(scope.env)}
 	switch {
 	case step.Exec != nil:
 		program, err := renderTemplate(step.Exec.Program, rv)
@@ -872,7 +874,7 @@ func (s *runState) prepareAction(scope *varScope, step Step) (PreparedAction, er
 			action.Dir = resolveDir(scope.dir, file.Dir)
 		}
 		if len(file.Env) > 0 {
-			action.Env = envList(mergeStringMaps(scope.env, file.Env))
+			action.Env = data.EnvList(mergeStringMaps(scope.env, file.Env))
 		}
 		action.Kind = "file"
 		action.Program = program
@@ -886,7 +888,7 @@ func (s *runState) prepareAction(scope *varScope, step Step) (PreparedAction, er
 // prepareDynamicAction builds the command that produces a dynamic variable.
 func (s *runState) prepareDynamicAction(scope *varScope, spec DynamicVar) (PreparedAction, error) {
 	rv := scope.renderVars()
-	action := PreparedAction{Dir: scope.dir, Env: envList(scope.env)}
+	action := PreparedAction{Dir: scope.dir, Env: data.EnvList(scope.env)}
 	switch {
 	case spec.Exec != nil:
 		program, err := renderTemplate(spec.Exec.Program, rv)
@@ -1076,18 +1078,18 @@ func (s *runState) planDeferredAction(call *callState, scope *varScope, step Ste
 	switch {
 	case step.Exec != nil:
 		action.Program = step.Exec.Program
-		action.Args = cloneStrings(step.Exec.Args)
+		action.Args = data.CloneStrings(step.Exec.Args)
 	case step.Shell != nil:
 		action.Program = step.Shell.Name
 		action.Script = step.Shell.Script
 	case step.File != nil:
 		action.Program = step.File.Name
-		action.Args = cloneStrings(step.File.Args)
+		action.Args = data.CloneStrings(step.File.Args)
 	case step.Host != nil:
 		action.Program = step.Host.Name
 	}
 	action.Dir = scope.dir
-	action.EnvKeys = sortedKeys(scope.env)
+	action.EnvKeys = data.SortedKeys(scope.env)
 	s.planAction(action)
 }
 
@@ -1124,7 +1126,7 @@ func (r *Runner) Inspect(ctx context.Context, req Request) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	call := &callState{id: s.nextCallID(root.Name), task: root, args: cloneStrings(req.Args), depth: 1, dir: s.baseDir}
+	call := &callState{id: s.nextCallID(root.Name), task: root, args: data.CloneStrings(req.Args), depth: 1, dir: s.baseDir}
 	if err := s.runTask(ctx, call); err != nil {
 		return Plan{}, err
 	}
@@ -1200,12 +1202,12 @@ func lookupEnvKey(env map[string]string, name string) (string, bool) {
 	if _, ok := env[name]; ok {
 		return name, true
 	}
-	if !isWindows {
+	if !data.IsWindows {
 		return "", false
 	}
-	want := envKey(name)
+	want := data.EnvKey(name)
 	for key := range env {
-		if envKey(key) == want {
+		if data.EnvKey(key) == want {
 			return key, true
 		}
 	}

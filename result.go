@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// errf builds a plain error, used as the cause of a classified RunError.
+func errf(format string, args ...any) error { return fmt.Errorf(format, args...) }
+
+// errDeferred marks a value that only exists at run time. Inspect reports it as
+// deferred instead of executing anything.
+var errDeferred = errors.New("taskrun: value requires execution")
+
 // Status is the final status of a run, a task call or a step.
 type Status string
 

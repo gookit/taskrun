@@ -3,6 +3,8 @@ package taskrun
 import (
 	"context"
 	"io"
+
+	"github.com/gookit/taskrun/internal/data"
 )
 
 // Request describes one isolated run. Inputs are copied when the run starts;
@@ -65,9 +67,9 @@ func (r Request) validate() error {
 func newRequest(req Request) Request {
 	out := req
 	out.Args = append([]string(nil), req.Args...)
-	out.Vars = cloneDataMap(req.Vars)
-	out.Env = cloneStringMap(req.Env)
-	out.HostData = cloneDataMap(req.HostData)
+	out.Vars = data.CloneMap(req.Vars)
+	out.Env = data.CloneStringMap(req.Env)
+	out.HostData = data.CloneMap(req.HostData)
 	return out
 }
 

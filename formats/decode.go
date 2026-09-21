@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/gookit/taskrun"
+
+	"github.com/gookit/taskrun/internal/data"
 )
 
 // decodeError locates a decoding problem in its source file and field path.
@@ -33,7 +35,7 @@ func (d *decoder) fail(path, format string, args ...any) error {
 }
 
 func (d *decoder) checkKeys(value map[string]any, path string, allowed ...string) error {
-	for _, key := range sortedKeys(value) {
+	for _, key := range data.SortedDataKeys(value) {
 		known := false
 		for _, name := range allowed {
 			if key == name {
@@ -121,7 +123,7 @@ func (d *decoder) getStringMap(value map[string]any, path, key string) (map[stri
 		return nil, ok, err
 	}
 	out := make(map[string]string, len(raw))
-	for _, name := range sortedKeys(raw) {
+	for _, name := range data.SortedDataKeys(raw) {
 		text, ok := raw[name].(string)
 		if !ok {
 			return nil, false, d.fail(path+"."+key+"."+name, "must be a string, got %T", raw[name])
@@ -211,7 +213,7 @@ func decodeDefinition(raw map[string]any, source, baseDir, format string) (taskr
 	if !ok {
 		return taskrun.Definition{}, d.fail("", "tasks is required")
 	}
-	for _, name := range sortedKeys(tasksRaw) {
+	for _, name := range data.SortedDataKeys(tasksRaw) {
 		task, err := d.decodeTask(name, tasksRaw[name])
 		if err != nil {
 			return taskrun.Definition{}, err
@@ -223,7 +225,7 @@ func decodeDefinition(raw map[string]any, source, baseDir, format string) (taskr
 		return taskrun.Definition{}, err
 	}
 	if ok {
-		for _, name := range sortedKeys(filesRaw) {
+		for _, name := range data.SortedDataKeys(filesRaw) {
 			file, err := d.decodeFile(name, filesRaw[name])
 			if err != nil {
 				return taskrun.Definition{}, err
@@ -565,7 +567,7 @@ func (d *decoder) decodeDynamicVars(value map[string]any, path string) (map[stri
 		return nil, ok, err
 	}
 	out := make(map[string]taskrun.DynamicVar, len(raw))
-	for _, name := range sortedKeys(raw) {
+	for _, name := range data.SortedDataKeys(raw) {
 		itemPath := path + ".dynamic_vars." + name
 		spec, ok := raw[name].(map[string]any)
 		if !ok {

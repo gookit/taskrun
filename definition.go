@@ -1,11 +1,16 @@
 package taskrun
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/gookit/taskrun/internal/graph"
+
+	"github.com/gookit/taskrun/internal/data"
 )
 
 // Definition is a task and script definition. New validates it and publishes a
@@ -199,9 +204,9 @@ func (s Step) actionCount() int {
 // state with its caller or with another Runner.
 func cloneDefinition(def Definition) Definition {
 	out := def
-	out.Vars = cloneDataMap(def.Vars)
-	out.Env = cloneStringMap(def.Env)
-	out.EnvPaths = cloneStrings(def.EnvPaths)
+	out.Vars = data.CloneMap(def.Vars)
+	out.Env = data.CloneStringMap(def.Env)
+	out.EnvPaths = data.CloneStrings(def.EnvPaths)
 	out.Sources = append([]Source(nil), def.Sources...)
 	out.Tasks = make(map[string]Task, len(def.Tasks))
 	for name, task := range def.Tasks {
@@ -216,11 +221,11 @@ func cloneDefinition(def Definition) Definition {
 
 func cloneTask(t Task) Task {
 	out := t
-	out.Deps = cloneStrings(t.Deps)
-	out.Vars = cloneDataMap(t.Vars)
-	out.Env = cloneStringMap(t.Env)
-	out.EnvPaths = cloneStrings(t.EnvPaths)
-	out.Platform = cloneStrings(t.Platform)
+	out.Deps = data.CloneStrings(t.Deps)
+	out.Vars = data.CloneMap(t.Vars)
+	out.Env = data.CloneStringMap(t.Env)
+	out.EnvPaths = data.CloneStrings(t.EnvPaths)
+	out.Platform = data.CloneStrings(t.Platform)
 	out.DynamicVars = cloneDynamicVars(t.DynamicVars)
 	out.Steps = make([]Step, len(t.Steps))
 	for i, step := range t.Steps {
@@ -231,30 +236,30 @@ func cloneTask(t Task) Task {
 
 func cloneStep(s Step) Step {
 	out := s
-	out.Vars = cloneDataMap(s.Vars)
-	out.Env = cloneStringMap(s.Env)
-	out.EnvPaths = cloneStrings(s.EnvPaths)
-	out.Platform = cloneStrings(s.Platform)
+	out.Vars = data.CloneMap(s.Vars)
+	out.Env = data.CloneStringMap(s.Env)
+	out.EnvPaths = data.CloneStrings(s.EnvPaths)
+	out.Platform = data.CloneStrings(s.Platform)
 	out.DynamicVars = cloneDynamicVars(s.DynamicVars)
 	if s.Exec != nil {
 		spec := *s.Exec
-		spec.Args = cloneStrings(s.Exec.Args)
+		spec.Args = data.CloneStrings(s.Exec.Args)
 		out.Exec = &spec
 	}
 	if s.Shell != nil {
 		spec := *s.Shell
-		spec.PrefixArgs = cloneStrings(s.Shell.PrefixArgs)
+		spec.PrefixArgs = data.CloneStrings(s.Shell.PrefixArgs)
 		out.Shell = &spec
 	}
 	if s.File != nil {
 		spec := *s.File
-		spec.Args = cloneStrings(s.File.Args)
+		spec.Args = data.CloneStrings(s.File.Args)
 		out.File = &spec
 	}
 	if s.Task != nil {
 		call := *s.Task
 		if s.Task.Args != nil {
-			call.Args = cloneStrings(s.Task.Args)
+			call.Args = data.CloneStrings(s.Task.Args)
 		} else {
 			call.Args = nil
 		}
@@ -264,7 +269,7 @@ func cloneStep(s Step) Step {
 		call := *s.Host
 		call.Args = make([]any, len(s.Host.Args))
 		for i, arg := range s.Host.Args {
-			call.Args[i] = cloneData(arg)
+			call.Args[i] = data.Clone(arg)
 		}
 		out.Host = &call
 	}
@@ -280,17 +285,17 @@ func cloneDynamicVars(in map[string]DynamicVar) map[string]DynamicVar {
 		item := DynamicVar{}
 		if dyn.Exec != nil {
 			spec := *dyn.Exec
-			spec.Args = cloneStrings(dyn.Exec.Args)
+			spec.Args = data.CloneStrings(dyn.Exec.Args)
 			item.Exec = &spec
 		}
 		if dyn.Shell != nil {
 			spec := *dyn.Shell
-			spec.PrefixArgs = cloneStrings(dyn.Shell.PrefixArgs)
+			spec.PrefixArgs = data.CloneStrings(dyn.Shell.PrefixArgs)
 			item.Shell = &spec
 		}
 		if dyn.File != nil {
 			spec := *dyn.File
-			spec.Args = cloneStrings(dyn.File.Args)
+			spec.Args = data.CloneStrings(dyn.File.Args)
 			item.File = &spec
 		}
 		out[name] = item
@@ -300,9 +305,9 @@ func cloneDynamicVars(in map[string]DynamicVar) map[string]DynamicVar {
 
 func cloneScriptFile(f ScriptFile) ScriptFile {
 	out := f
-	out.Args = cloneStrings(f.Args)
-	out.Env = cloneStringMap(f.Env)
-	out.Interpreter.PrefixArgs = cloneStrings(f.Interpreter.PrefixArgs)
+	out.Args = data.CloneStrings(f.Args)
+	out.Env = data.CloneStringMap(f.Env)
+	out.Interpreter.PrefixArgs = data.CloneStrings(f.Interpreter.PrefixArgs)
 	return out
 }
 
@@ -387,8 +392,69 @@ func prepareDefinition(def Definition, cfg runnerConfig) (Definition, error) {
 	return out, nil
 }
 
+// checkGraph rejects cycles and over-deep call chains for the whole definition,
+// not only for the tasks a caller may run. It builds the plain node and edge
+// lists the graph package works with and maps its errors onto the package
+// sentinels.
+func checkGraph(def Definition, maxDepth int) error {
+	nodes := make([]string, 0, len(def.Tasks))
+	edges := make(map[string][]string, len(def.Tasks))
+	for name, task := range def.Tasks {
+		nodes = append(nodes, name)
+		edges[name] = taskEdges(task)
+	}
+	err := graph.Check(nodes, edges, maxDepth)
+	if err == nil {
+		return nil
+	}
+	var cycle *graph.CycleError
+	if errors.As(err, &cycle) {
+		return &RunError{Kind: ErrKindInvalidDefinition, Err: &cycleCause{path: cycle.Path}}
+	}
+	// The depth error keeps its original text and classification.
+	return invalidDef("%s", err)
+}
+
+// taskEdges returns the static edges of a task: dependencies in declaration
+// order, followed by task calls in step order. Both kinds participate in cycle
+// detection even when a condition would skip them.
+func taskEdges(task Task) []string {
+	edges := append([]string(nil), task.Deps...)
+	for _, step := range task.Steps {
+		if step.Task != nil {
+			edges = append(edges, step.Task.Name)
+		}
+	}
+	return edges
+}
+
+// cycleCause reports a cycle and matches both the cycle and definition
+// sentinels.
+type cycleCause struct {
+	path []string
+}
+
+func (e *cycleCause) Error() string {
+	return "dependency cycle: " + strings.Join(e.path, " -> ")
+}
+
+// Is reports the error as both a cycle and a definition error.
+func (e *cycleCause) Is(target error) bool {
+	return target == ErrDependencyCycle || target == ErrInvalidDefinition
+}
+
 func invalidDef(format string, args ...any) error {
 	return &RunError{Kind: ErrKindInvalidDefinition, Err: fmt.Errorf(format, args...)}
+}
+
+// validateData rejects caller supplied data the library cannot copy. The
+// internal/data helper reports the offending path; the classification stays
+// invalid_request.
+func validateData(value any, path string) error {
+	if err := data.Validate(value, path); err != nil {
+		return &RunError{Kind: ErrKindInvalidRequest, Err: err}
+	}
+	return nil
 }
 
 func validateScriptFile(name string, file *ScriptFile, baseDir string) error {

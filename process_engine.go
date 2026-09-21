@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/gookit/taskrun/internal/data"
 )
 
 // ProcessEngine is the default Engine. It runs argv actions and explicit shell
@@ -218,15 +220,15 @@ func shellCommand(name, script string, prefixArgs []string, env map[string]strin
 	normalized := normalizeShellName(name)
 	switch normalized {
 	case "sh", "bash", "zsh":
-		return normalized, append(cloneStrings(prefixArgs), "-c", script), nil
+		return normalized, append(data.CloneStrings(prefixArgs), "-c", script), nil
 	case "cmd":
 		program := "cmd.exe"
 		if comspec, ok := lookupEnv(env, "ComSpec"); ok && comspec != "" {
 			program = comspec
 		}
-		return program, append(cloneStrings(prefixArgs), "/D", "/S", "/C", script), nil
+		return program, append(data.CloneStrings(prefixArgs), "/D", "/S", "/C", script), nil
 	case "pwsh", "powershell":
-		return normalized, append(cloneStrings(prefixArgs), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script), nil
+		return normalized, append(data.CloneStrings(prefixArgs), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script), nil
 	default:
 		return "", nil, &ProcessError{Kind: ErrKindStart, Err: errf("unsupported shell %q; supported: sh, bash, zsh, cmd, pwsh, powershell", name)}
 	}
@@ -260,7 +262,7 @@ func resolveProgram(program string, env map[string]string, dir string) (string, 
 		pathValue = os.Getenv("PATH")
 	}
 	extensions := []string{""}
-	if isWindows {
+	if data.IsWindows {
 		extensions = windowsExecutableExtensions(env)
 	}
 	for _, entry := range filepath.SplitList(pathValue) {
@@ -283,7 +285,7 @@ func isExecutableFile(path string) bool {
 	if err != nil || info.IsDir() {
 		return false
 	}
-	if isWindows {
+	if data.IsWindows {
 		return true
 	}
 	return info.Mode().Perm()&0o111 != 0

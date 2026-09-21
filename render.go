@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/gookit/taskrun/internal/data"
 )
 
 // renderVars is the read-only view available to template interpolation and
@@ -74,7 +76,7 @@ func lookupTemplate(namespace, name string, rv renderVars) (string, error) {
 				return "", err
 			}
 			if found {
-				merged := mergeDataMaps(rv.Vars, map[string]any{top: value})
+				merged := data.Merge(rv.Vars, map[string]any{top: value})
 				if resolved, ok := lookupPath(merged, name); ok {
 					return renderScalar("vars."+name, resolved)
 				}
@@ -160,12 +162,12 @@ func lookupEnv(env map[string]string, name string) (string, bool) {
 	if value, ok := env[name]; ok {
 		return value, true
 	}
-	if !isWindows {
+	if !data.IsWindows {
 		return "", false
 	}
-	want := envKey(name)
+	want := data.EnvKey(name)
 	for key, value := range env {
-		if envKey(key) == want {
+		if data.EnvKey(key) == want {
 			return value, true
 		}
 	}
@@ -217,7 +219,7 @@ func detectVarCycle(level map[string]any) error {
 		state[key] = done
 		return nil
 	}
-	for _, key := range sortedDataKeys(level) {
+	for _, key := range data.SortedDataKeys(level) {
 		if err := visit(key, nil); err != nil {
 			return err
 		}
@@ -254,7 +256,7 @@ func resolveVarLevel(level map[string]any, base renderVars) (map[string]any, err
 		value := level[key]
 		if text, ok := value.(string); ok && strings.Contains(text, "${") {
 			view := base
-			view.Vars = mergeDataMaps(base.Vars, out)
+			view.Vars = data.Merge(base.Vars, out)
 			for _, ref := range varRefs(text) {
 				if _, sameLevel := level[ref]; !sameLevel {
 					continue
@@ -263,14 +265,14 @@ func resolveVarLevel(level map[string]any, base renderVars) (map[string]any, err
 					return err
 				}
 			}
-			view.Vars = mergeDataMaps(base.Vars, out)
+			view.Vars = data.Merge(base.Vars, out)
 			rendered, err := renderTemplate(text, view)
 			if err != nil {
 				return err
 			}
 			out[key] = rendered
 		} else {
-			out[key] = cloneData(value)
+			out[key] = data.Clone(value)
 		}
 		state[key] = done
 		return nil
