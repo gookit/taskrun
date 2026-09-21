@@ -1,9 +1,26 @@
 # 发布与推送清单（2026-09-21）
 
-> 这些步骤需要外部动作授权，本文件只是把命令准备好，未执行任何一步。
+> 这些步骤需要外部动作授权。已获授权并完成的部分在下方标注为「已完成」；未完成的步骤把命令准备好。
 > 模块：`github.com/gookit/taskrun`；本机工作副本：`D:/work/inhere/my-tools-dev/gookit2/kscript`。
 
-## 1. 本地目录改名（可选，先做更省事）
+## 状态（2026-09-21）
+
+| 步骤 | 状态 |
+|---|---|
+| 建远端 + 首次推送 | 已完成（`origin` = `https://github.com/gookit/taskrun.git`，`main` 已推送） |
+| 组织 CI 与新增工作流 | 已完成：`go.yml`（组织模板，仅修了 `matrix.os` 笔误）、`codeql.yml`、`release.yml`，另加 `race-and-windows.yml`（ubuntu `-race` + windows 构建/测试） |
+| Windows CI 失败与修复 | 已修复待推送：commit `688c5b5`（分层清理，见设计修订 0.4 / D11）。本机仓库中 `688c5b5`、`8a79258`、`c110447` 尚未推送 |
+| 推送 | 阻塞：写此文件时 `github.com:443` 从本机不可达（`Failed to connect ... port 443`），已重试多次；`api.github.com` 可达（`gh` 命令正常） |
+| tag `v0.1.0` | 未执行（等 windows job 转绿再打） |
+
+推送后可这样确认 Windows job：
+
+```bash
+gh run list --workflow=race-and-windows.yml --limit 3
+gh run watch <run-id>            # 或: gh run view --job <job-id> --log-failed
+```
+
+## 1. 本地目录改名（可选，已降级为收尾项）
 
 本机工作副本目录名仍是 `kscript`（改目录时被本工作区某个进程的文件锁挡住）。两种做法：
 
@@ -12,14 +29,16 @@
 move /y D:\work\inhere\my-tools-dev\gookit2\kscript D:\work\inhere\my-tools-dev\gookit2\taskrun
 ```
 
-或者跳过改名，等仓库建好后直接以新名字克隆，再把本地这份删掉。
+已结论：可以跳过或放到发布之后。模块路径已经是 `github.com/gookit/taskrun`，本地目录名
+只影响两处临时 `replace`；按第 4、5 步换成真实版本后，`replace` 会整行删除，目录名就与
+构建无关了。现在强行改名会打断使用者已经打开的路径，收益低，故保持现状。
 
 改名后需要同步两处 `replace` 目标（否则构建会失败）：
 
 - `inhere-tools/kite-go/go.mod`：`replace github.com/gookit/taskrun => ../../gookit2/taskrun`
 - `tmp/taskrun-consumer/go.mod`：`replace github.com/gookit/taskrun => D:/work/inhere/my-tools-dev/gookit2/taskrun`
 
-## 2. 创建远端仓库并推送
+## 2. 创建远端仓库并推送（已完成）
 
 ```bash
 cd <taskrun-module-root>
@@ -69,7 +88,8 @@ go list -deps ./... | grep -c inhere/kite-go   # 期望 0
 
 ## 6. 还没有取得的证据（发布后补齐）
 
-- `go test -race ./...` 与 windows 构建/测试的 CI 日志（`.github/workflows/race-and-windows.yml`）。
+- 仍未取得的证据：windows job 的重跑结果（需先推送 `688c5b5`）；`go.yml` 组织模板矩阵日志的第一个全绿运行。
+  ubuntu `-race` 已两次通过。
 - Go 1.23/1.24/1.25/stable 矩阵日志（`.github/workflows/go.yml`，组织模板）。
 - 第二真实应用（T10）：项目路径、Go 版本、实际运行 Result。
 - 在真实 Kite 配置上以 `script_engine: taskrun` 实际执行一次任务（转换、校验、规划已通过）。
