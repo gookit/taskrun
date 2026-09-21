@@ -264,5 +264,35 @@ kite-go 侧的 require+replace 与桥接导入（别名 `kscript2` 已删除）�
 
 检查方式只是 `go list -m github.com/gookit/taskrun@v0.1.0`（查询，不改动这些仓库）。
 接入需要用户指定应用与期望用法，例如把哪段手工 `exec` 流程换成 taskrun 定义。
+
+### 第二应用原型（2026-09-21，`tmp/taskrun-second-app/`）
+
+在等用户选定应用之前，先把 `skillc` 的真实流程做成可运行原型，验证形态与能力覆盖：
+把「clone 技能仓库 → 读 HEAD → 跑技能安装脚本 → 建链接（symlink，失败回退 copy）」
+写成 `tasks.yaml`（schema v1）+ 一个只导入 `github.com/gookit/taskrun`（**已发布 v0.1.0**）
+的 `main.go`，在本机真实执行：
+
+```
+-> task install
+-> task fetch
+   step clone
+   step report-head
+   skill HEAD is ebc36b2
+   step run-installer
+installer wrote ...\installed\installer-ran.txt
+   step link-skill
+   linked with mode symlink
+   step platform-note
+git version 2.54.0.windows.1
+status=succeeded task calls=2 steps=5
+demo ok: the skill was cloned, installed and linked
+```
+
+覆盖到的能力：`deps` 顺序、`dynamic_vars`（`git rev-parse` 取 HEAD）、`host` Handler
+（报告 HEAD、建链接）、`if` 平台条件（Windows 才跑的步骤）、`WithObserver` 进度回调、
+运行期变量由调用方注入。脚本结束后校验产物存在。
+
+这只是**原型**：`skillc` 仓库本身未改动。要算 T10 完成，仍需用户指定应用并把这段手工
+`exec` 流程真正换进它的生产代码。
 - `kite.yml`（CLI 主配置）在这台机器上不存在，`script_engine: taskrun` 的 CLI 级切换未在
   本机验证；库/桥接层已在真实配置上真实执行过任务（见 T09）。
