@@ -42,7 +42,8 @@ make check
 make test-race
 ```
 
-Windows 无 C 工具链时 `make test-race` 会失败，属预期（CI 的 Linux job 已覆盖）。
+Windows 无 C 工具链时 `make test-race` 会失败，属预期：CI 的
+`.github/workflows/race-and-windows.yml` 已在 ubuntu 与 windows runner 上覆盖。
 
 ## 4. 把 kite-go 的临时 replace 换成真实版本
 
@@ -68,7 +69,7 @@ go list -deps ./... | grep -c inhere/kite-go   # 期望 0
 
 ## 6. 还没有取得的证据（发布后补齐）
 
-- `go test -race ./...` 的真实运行日志。
-- Go 1.23.x / 1.25.x × ubuntu / windows 的 CI matrix 日志（`.github/workflows/test.yml`）。
+- `go test -race ./...` 与 windows 构建/测试的 CI 日志（`.github/workflows/race-and-windows.yml`）。
+- Go 1.23/1.24/1.25/stable 矩阵日志（`.github/workflows/go.yml`，组织模板）。
 - 第二真实应用（T10）：项目路径、Go 版本、实际运行 Result。
 - 在真实 Kite 配置上以 `script_engine: taskrun` 实际执行一次任务（转换、校验、规划已通过）。

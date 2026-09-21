@@ -1,0 +1,51 @@
+name: race-and-windows
+
+# Complements the organization's go.yml (ubuntu x Go 1.23/1.24/1.25/stable) with
+# the two checks it does not cover: the race detector, and the platform specific
+# code paths on Windows.
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "go.mod"
+      - "**.go"
+      - "**.yml"
+  pull_request:
+    paths:
+      - "go.mod"
+      - "**.go"
+      - "**.yml"
+
+jobs:
+  race:
+    name: Race detector
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out codes
+        uses: actions/checkout@v7
+      - name: Setup Go SDK
+        uses: actions/setup-go@v6
+        timeout-minutes: 3
+        with:
+          go-version: "1.23"
+      - name: Run tests with the race detector
+        run: go test -race -count=1 ./...
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - name: Check out codes
+        uses: actions/checkout@v7
+      - name: Setup Go SDK
+        uses: actions/setup-go@v6
+        timeout-minutes: 3
+        with:
+          go-version: "1.23"
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Run tests
+        run: go test -count=1 ./...

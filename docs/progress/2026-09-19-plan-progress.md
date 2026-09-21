@@ -30,7 +30,7 @@
 | T07 取消、超时与清理 | 完成 | `process_{unix,windows}.go`；POSIX 进程组、Windows Job Object、宽限期、能力不可用即失败、`Canceled`/`TimedOut` 分类 |
 | T08 Runner/Inspect/示例/README | 完成 | Runner/`Inspect`/README/中文 README、CLI consumer 与 `examples/{basic,config,host}` 均可运行 |
 | T09 Kite 迁移 | 基本完成 | `formats/legacy.go` 转换器（含 ParseEnv 的 `${env.*}` 重写）+ `formats.SplitCommandLine`；kite-go 侧 `pkg/kscript/bridge` 适配包与 `script_engine` 开关（默认 `legacy`，转换失败自动回退）；`RunAny` 与 `kite run --type=script` 已接入；任务级、配置级双引擎对照均通过；仓库真实配置（`config/module/scripts.yml`，8 个任务）转换、校验与规划全部通过、0 warning；列表/搜索/`--show` 有意保留旧实现；仅剩“用真实配置实际执行任务”（有副作用，需你运行） |
-| T10 第二应用与 Go 版本矩阵 | 未完成 | CI matrix 定义存在但未运行；第二真实应用未确认，`tmp/taskrun-consumer` 使用 `replace`，不构成可复用验收 |
+| T10 第二应用与 Go 版本矩阵 | 部分 | 仓库已建（`gookit/taskrun`）并推送，CI 已在真实 runner 上跑（`go.yml`：ubuntu × Go 1.23/1.24/1.25/stable；`race-and-windows.yml`：ubuntu `-race` + windows 构建与测试）；第二真实应用仍未确认，`tmp/taskrun-consumer` 使用 `replace` |
 | T11 文档、版本与发布准备 | 基本完成 | README/中文 README/kite-migration/CHANGELOG 完成；LICENSE 保留源码原始版权行；`docs/release/2026-09-19-v0.1.0-candidate-review.md` 形成发布候选（含依赖许可证、API 面、限制与发布清单）；缺外部动作授权（建远端/推送/tag/发布） |
 
 ## 验证命令与结果（2026-09-19）
@@ -58,10 +58,12 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引�
 
 未完成的验证：
 
-- `go test -race ./...`：本机为 Windows 且无 C 工具链（`CGO_ENABLED=0`，无 gcc），无法运行；
-  需要在 Linux runner 或安装 gcc 后执行。替代措施：`TestConcurrentRunsAreIsolated`
+- `go test -race ./...`：本机为 Windows 且无 C 工具链（`CGO_ENABLED=0`，无 gcc），无法本地运行；
+  已由 `.github/workflows/race-and-windows.yml` 的 ubuntu job 在真实 runner 上执行。替代措施：`TestConcurrentRunsAreIsolated`
   用 16 个并发 Run × 4 轮、每轮校验输出等于本请求的变量值，可在没有 race 检测时发现跨请求串值。
-- CI matrix（Go 1.23.x/1.25.x、ubuntu/windows）尚未在真实 runner 上执行（无远端）。
+- CI：`.github/workflows/go.yml`（组织模板，ubuntu × Go 1.23/1.24/1.25/stable）与
+  `.github/workflows/race-and-windows.yml`（新增：ubuntu `-race`、windows build+vet+test）。
+  本机目录暂无 C 编译器，windows 侧此前只有本地证据。
 - 第二真实应用接入与结果记录（T10）。
 
 ## 设计验收矩阵覆盖情况
@@ -77,7 +79,7 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引�
 | A07 | go run / sh / cmd / pwsh 解释器 | 覆盖：`TestShellArgumentContract` 固定各 shell 的调用契约（含 `zsh`），`TestShellSelectionIsExplicit` 在装有解释器的主机上真实执行 `sh`/`bash`/`pwsh`/`powershell`/`cmd`（本机 2026-09-21 实测五个全部通过），`file` 动作走 `go run` 与 `prefix_args` 另有测试 |
 | A08 | vars/env 优先级、CleanEnv、PATH、动态变量 | 覆盖 |
 | A09 | dry-run 零副作用与 Deferred | 覆盖 |
-| A10 | 并发 Run 隔离 | 覆盖（并发用例通过；race 检测受限） |
+| A10 | 并发 Run 隔离 | 覆盖（并发用例通过；race 检测由 CI 的 ubuntu job 执行） |
 | A11 | 超时/取消清理进程树 | 覆盖（子进程树标记文件用例） |
 | A12 | 大输出、截断、writer 失败 | 覆盖 |
 | A13 | 非零退出、ignore_error、取消、未知根任务 | 覆盖 |
