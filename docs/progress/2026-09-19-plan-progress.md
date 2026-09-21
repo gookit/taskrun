@@ -234,6 +234,7 @@ kite-go 侧的 require+replace 与桥接导入（别名 `kscript2` 已删除）�
 | 真实代理正式验收 | 全新 module 用 `proxy.golang.com.cn` / `goproxy.io` 取到 `v0.1.0`（`Origin.Hash` = `156c09e`），`go list -deps` 无 kite-go，运行输出 `status=succeeded tasks=2 steps=4` |
 | kite-go 切换 | commit `ac8270e`：去掉临时 `replace`，`require github.com/gookit/taskrun v0.1.0`；`go build ./...` 与 `pkg/kscript`、`bridge`、`cmdbiz` 测试通过（双引擎对照现在跑在已发布版本上） |
 | 工作区外 consumer | `tmp/taskrun-consumer` 去掉 replace 后用 v0.1.0，测试通过、无 kite-go 泄漏 |
+| pkg.go.dev | 已索引 `v0.1.0`（2026-09-21），页面列出全部导出 API；本机直连该站与 `proxy.golang.org` 被挡，需换通道查看 |
 
 发布过程中值得记下的两件事：
 
@@ -249,5 +250,19 @@ kite-go 侧的 require+replace 与桥接导入（别名 `kscript2` 已删除）�
 - T10：第二真实应用未确认（项目路径与 Go 版本）。
 - 本机目录名仍是 `gookit2/kscript`：kite-go 的 `replace` 已删除，目录名不再影响构建，
   改名降级为可选的收尾动作。
+
+### T10 第二应用候选（2026-09-21 扫描）
+
+扫描工作区内的 Go 模块，按「Go 1.23+、确实会执行外部命令、能解析 taskrun v0.1.0」筛出：
+
+| 模块 | go 指令 | 外部命令使用位置 | 解析 v0.1.0 |
+|---|---|---|---|
+| `github.com/inhere/xenv` | 1.24 | `internal/xenv/service/check_service.go`、`internal/xenv/shell` | 是 |
+| `github.com/inhere/sshc` | 1.25 | `internal/command/cfg.go`、`internal/command/util.go` | 是 |
+| `github.com/inhere/skillc` | 1.25 | `internal/infra/agentfs/installer.go`、`internal/infra/gitx/client.go` | 是 |
+| `github.com/inhere/clitools` | 1.23 | 未见 `exec.Command`；其本地 `go.work` 指向不存在的 `../goutil`，当前状态依赖无法解析 | 否（go.work 状态） |
+
+检查方式只是 `go list -m github.com/gookit/taskrun@v0.1.0`（查询，不改动这些仓库）。
+接入需要用户指定应用与期望用法，例如把哪段手工 `exec` 流程换成 taskrun 定义。
 - `kite.yml`（CLI 主配置）在这台机器上不存在，`script_engine: taskrun` 的 CLI 级切换未在
   本机验证；库/桥接层已在真实配置上真实执行过任务（见 T09）。

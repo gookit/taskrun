@@ -18,6 +18,7 @@
 | 真实代理正式验收 | 已完成：全新 module 通过 `proxy.golang.com.cn`/`goproxy.io` 取到 `v0.1.0`（哈希 `156c09e`），`go list -deps` 无 kite-go，运行输出 `status=succeeded tasks=2 steps=4` |
 | kite-go 切真实版本 | 已完成：commit `ac8270e`（去掉 replace，`require github.com/gookit/taskrun v0.1.0`），`go build ./...` 与 `pkg/kscript`、`bridge`、`cmdbiz` 测试通过 |
 | 工作区外 consumer 切真实版本 | 已完成：`tmp/taskrun-consumer` 去掉 replace 后用 v0.1.0，测试通过且无 kite-go 泄漏 |
+| 文档站 | 已完成：pkg.go.dev 已索引 `v0.1.0`（页面列出全部导出 API 与 2026-09-21 版本）。注意本机直连 `pkg.go.dev`/`proxy.golang.org` 会被挡，用其它通道才能看到 |
 
 推送后可这样确认 Windows job：
 
