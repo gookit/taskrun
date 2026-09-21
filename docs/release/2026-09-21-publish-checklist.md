@@ -102,6 +102,21 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/
 
 ## 5. 工作区外正式验收（A01/A02）
 
+发布前已经用本地 file 模块代理做过一次等价验收（做法与结果见
+`docs/progress/2026-09-19-plan-progress.md` 的「工作区外的独立 module」一节），
+验收程序与脚本留在工作区 `tmp/taskrun-acceptance/`（`main.go` + `run-acceptance.bat`）。
+tag 推送后只需把它换成真实代理再跑一遍：
+
+```bash
+cd tmp/taskrun-acceptance
+# 去掉 GOPROXY 覆盖，直接走真实代理；版本改成 v0.1.0
+set GOPROXY=
+go mod edit -require=github.com/gookit/taskrun@v0.1.0
+go mod tidy && go build ./... && go run .
+```
+
+另外把工作区里那个长期存在的 consumer 从 `replace` 切到真实版本：
+
 ```bash
 cd tmp/taskrun-consumer
 go mod edit -dropreplace=github.com/gookit/taskrun

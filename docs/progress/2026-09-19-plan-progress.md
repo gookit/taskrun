@@ -48,8 +48,19 @@ go run ./cmd/taskrun -config ./examples/basic.json -task hello          # 通过
 go run ./cmd/taskrun -config ./examples/basic.json -task check -dry-run # 通过，输出计划
 go list -deps ./...            # 只有标准库与 expr/go-yaml/toml，无 inhere/kite-go、gcli、cliui、gookit/slog
 
-# 工作区外的独立 module（仅导入主包）
+# 工作区外的独立 module（仅导入主包，replace 到本地目录）
 cd ../../tmp/taskrun-consumer && go test -count=1 ./...   # 通过；go list -deps 无 kite-go
+
+# 工作区外的独立 module（模拟“已发布版本”，不依赖 replace）
+# 做法：用 git archive 从当前提交生成模块 zip，摆成 file:// 模块代理，再让一个
+# 全新 module 通过版本号引入；这样验证的是“发布后 go get 能否用”，而不是本地目录。
+#   <proxy>/github.com/gookit/taskrun/@v/v0.1.0-rc-local.{info,mod,zip}
+#   GOPROXY=file:///<proxy>,https://goproxy.cn,direct GOSUMDB=off GOFLAGS=-mod=mod
+#   go mod init acceptance && go mod edit -require=github.com/gookit/taskrun@v0.1.0-rc-local
+#   go mod tidy && go list -m github.com/gookit/taskrun && go build ./... && go run .
+# 结果（2026-09-21）：模块 zip 被接受并解析为 v0.1.0-rc-local；go list -deps 无 kite-go；
+# 程序输出 “status=succeeded tasks=2 steps=4”，并断言了冻结定义、跳过步骤、ErrNotFound、
+# ErrExit 与 handler 参数。唯一未做的只是真实 tag 之后用真实代理复核一次。
 
 # Kite 侧（迁移状态）
 cd ../../inhere-tools/kite-go && go build ./...
@@ -118,7 +129,7 @@ Go 1.23 工具链与 linux/darwin 交叉编译全部通过。
 
 | ID | 场景 | 现状 |
 |---|---|---|
-| A01 | 外部 module 只导入主包执行任务 | 本地通过：`tmp/taskrun-consumer` 编译、测试、`go list -deps` 无 kite-go；发布版本后的正式验收待外部动作 |
+| A01 | 外部 module 只导入主包执行任务 | 覆盖：`tmp/taskrun-consumer`（replace 到本地目录）编译/测试通过；另有本地 file 模块代理模拟“已发布版本”的验收，全新 module 通过版本号引入并真实运行通过，`go list -deps` 无 kite-go；真实 tag 后用真实代理复核待外部动作 |
 | A02 | 三格式等价与非法输入定位 | 覆盖（`formats` 测试） |
 | A03 | 缺失 deps、混合环、展开超限 | 覆盖（`TestCycleIsRejectedAtNewWithPath`、`TestExpansionLimitAtRuntime`） |
 | A04 | 菱形依赖与重复调用 | 覆盖（`TestDiamondDependencyRunsTwice`） |
