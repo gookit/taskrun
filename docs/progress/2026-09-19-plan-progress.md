@@ -274,7 +274,21 @@ kite-go 侧的 require+replace 与桥接导入（别名 `kscript2` 已删除）�
 - 本机目录名仍是 `gookit2/kscript`：kite-go 的 `replace` 已删除，目录名不再影响构建，
   改名降级为可选的收尾动作。
 
-### T10 第二应用候选（2026-09-21 扫描）
+## 发布 v0.2.0（2026-09-21）
+
+| 步骤 | 结果 |
+|---|---|
+| CHANGELOG 收尾 | `## [Unreleased]` → `## [v0.2.0] - 2026-09-21`（commit `879b6e4`） |
+| tag | `v0.2.0`（annotated）→ `879b6e4`，已推送 |
+| GitHub Release | `Tag-release` 工作流成功（run 35604330080）。这次有上一个 tag，`chlog prev last` 生成了 Refactor 分组（三个重构提交）；又在其上补了 CHANGELOG 的 Fixed/Changed 摘要，保证「并发崩溃修复」在发布页可见 |
+| 真实代理验收 | 全新 module 用 `proxy.golang.com.cn`/`goproxy.io` 取到 `v0.2.0`（GoVersion 1.23），`go list -deps` 无 kite-go，运行输出 `status=succeeded tasks=2 steps=4` |
+| kite-go 切换 | commit `152486f`：`require github.com/gookit/taskrun v0.2.0`；`go build ./...` 与 `pkg/kscript`、`bridge`、`cmdbiz` 测试通过 |
+| CI | tag 之前的 `e881b41` 上 action-tests（Go 1.23/1.24/1.25/stable）与 race-and-windows（Windows、race）全绿；CHANGELOG-only 提交被工作流 `paths` 过滤，不触发 |
+
+版本号说明：本次只有内部结构调整与一个并发修复，公开 API 逐字节未变；按 SemVer 也可以发
+`v0.1.1`，此处按用户要求发 `v0.2.0`。
+
+## T10 第二应用候选（2026-09-21 扫描）
 
 扫描工作区内的 Go 模块，按「Go 1.23+、确实会执行外部命令、能解析 taskrun v0.1.0」筛出：
 
@@ -288,7 +302,7 @@ kite-go 侧的 require+replace 与桥接导入（别名 `kscript2` 已删除）�
 检查方式只是 `go list -m github.com/gookit/taskrun@v0.1.0`（查询，不改动这些仓库）。
 接入需要用户指定应用与期望用法，例如把哪段手工 `exec` 流程换成 taskrun 定义。
 
-### 第二应用原型（2026-09-21，`tmp/taskrun-second-app/`）
+## 第二应用原型（2026-09-21，`tmp/taskrun-second-app/`）
 
 在等用户选定应用之前，先把 `skillc` 的真实流程做成可运行原型，验证形态与能力覆盖：
 把「clone 技能仓库 → 读 HEAD → 跑技能安装脚本 → 建链接（symlink，失败回退 copy）」
