@@ -1,0 +1,14 @@
+style: clear all revive findings
+
+- runner.go: rename the host-call local to hostCall (the enclosing scope already
+  has a call *callState), and drop fallbackCause, which was a no-op returning its
+  argument unchanged while pretending to apply a fallback kind.
+- runner.go: collapse the branch that only ever reassigned the same error.
+- taskrun.go: add the package comment.
+- process_unix.go: match the windows implementation and name the unused
+  syscall-only attach parameter.
+- formats/legacy.go: remove the warn/where plumbing that no leaf used, including
+  the cascade into legacyDynamicSpec.
+
+revive reports zero findings locally; build, vet, gofmt, tests, the Go 1.23
+toolchain run, and the linux/darwin cross builds all pass.

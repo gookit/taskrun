@@ -127,7 +127,7 @@ func LegacyDefinition(opts LegacyOptions) (LegacyResult, error) {
 	}
 
 	for name, file := range opts.Files {
-		converted, err := legacyScriptFile(name, file, opts.BaseDir, warn)
+		converted, err := legacyScriptFile(name, file, opts.BaseDir)
 		if err != nil {
 			return result, err
 		}
@@ -252,7 +252,7 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 		}
 	}
 	if dir, ok := legacyStringOne(value, "dir", "workdir"); ok {
-		task.Dir = translateLegacyTemplate(dir, taskKnown, warn, "task "+name+".dir")
+		task.Dir = translateLegacyTemplate(dir, taskKnown)
 	}
 	if desc, ok := legacyStringOne(value, "desc", "description"); ok {
 		task.Desc = desc
@@ -275,7 +275,7 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 	if env, ok := legacyStringMap(value, "env"); ok {
 		task.Env = map[string]string{}
 		for key, item := range env {
-			task.Env[key] = translateLegacyTemplate(item, taskKnown, warn, "task "+name+".env."+key)
+			task.Env[key] = translateLegacyTemplate(item, taskKnown)
 		}
 	}
 	if paths, ok := legacyStringListOne(value, "env_path", "env_paths"); ok {
@@ -291,14 +291,14 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 				continue
 			}
 			if kind, command, ok := legacyDynamicVar(text); ok {
-				spec, err := legacyDynamicSpec(kind, command, shell, taskKnown, warn, fmt.Sprintf("task %s.var %s", name, key))
+				spec, err := legacyDynamicSpec(kind, command, shell, taskKnown, fmt.Sprintf("task %s.var %s", name, key))
 				if err != nil {
 					return task, err
 				}
 				dynamic[key] = spec
 				continue
 			}
-			static[key] = translateLegacyTemplate(text, taskKnown, warn, fmt.Sprintf("task %s.vars.%s", name, key))
+			static[key] = translateLegacyTemplate(text, taskKnown)
 		}
 		if len(static) > 0 {
 			task.Vars = static
@@ -455,11 +455,11 @@ func legacyCommandExtrasOf(value map[string]any, taskName string, index int, kno
 	if env, ok := legacyStringMap(value, "env"); ok {
 		extras.Env = map[string]string{}
 		for key, item := range env {
-			extras.Env[key] = translateLegacyTemplate(item, commandKnown, warn, fmt.Sprintf("task %s command #%d env.%s", taskName, index, key))
+			extras.Env[key] = translateLegacyTemplate(item, commandKnown)
 		}
 	}
 	if dir, ok := legacyStringOne(value, "workdir", "dir"); ok {
-		extras.Dir = translateLegacyTemplate(dir, commandKnown, warn, fmt.Sprintf("task %s command #%d dir", taskName, index))
+		extras.Dir = translateLegacyTemplate(dir, commandKnown)
 	}
 	if condition, ok := legacyString(value, "if"); ok {
 		// Conditions are expr programs over bare variable names.
@@ -485,14 +485,14 @@ func legacyCommandExtrasOf(value map[string]any, taskName string, index int, kno
 				continue
 			}
 			if kind, command, ok := legacyDynamicVar(text); ok {
-				spec, err := legacyDynamicSpec(kind, command, "", commandKnown, warn, fmt.Sprintf("task %s command #%d var %s", taskName, index, key))
+				spec, err := legacyDynamicSpec(kind, command, "", commandKnown, fmt.Sprintf("task %s command #%d var %s", taskName, index, key))
 				if err != nil {
 					return extras, err
 				}
 				dynamic[key] = spec
 				continue
 			}
-			static[key] = translateLegacyTemplate(text, commandKnown, warn, fmt.Sprintf("task %s command #%d vars.%s", taskName, index, key))
+			static[key] = translateLegacyTemplate(text, commandKnown)
 		}
 		if len(static) > 0 {
 			extras.Vars = static
@@ -566,7 +566,7 @@ func legacyCommandStep(taskName string, index int, run, name string, extras lega
 			warn("%s: a bare @ prefix is converted to ignore_error only; legacy silent mode is Kite output policy", where)
 		}
 	}
-	translated := translateLegacyTemplate(run, known, warn, where)
+	translated := translateLegacyTemplate(run, known)
 	switch legacyShellName(shell) {
 	case "":
 		program, args, err := legacySplitCommandLine(translated)
@@ -632,9 +632,9 @@ func legacyDynamicVar(value string) (kind, command string, ok bool) {
 	return kind, strings.TrimSpace(value[pos+1:]), true
 }
 
-func legacyDynamicSpec(kind, command, defaultShell string, known map[string]bool, warn func(string, ...any), where string) (taskrun.DynamicVar, error) {
+func legacyDynamicSpec(kind, command, defaultShell string, known map[string]bool, where string) (taskrun.DynamicVar, error) {
 	if kind == "exec" {
-		program, args, err := legacySplitCommandLine(translateLegacyTemplate(command, known, warn, where))
+		program, args, err := legacySplitCommandLine(translateLegacyTemplate(command, known))
 		if err != nil {
 			return taskrun.DynamicVar{}, fmt.Errorf("legacy convert: %s: %w", where, err)
 		}
@@ -647,10 +647,10 @@ func legacyDynamicSpec(kind, command, defaultShell string, known map[string]bool
 	if shell == "" {
 		return taskrun.DynamicVar{}, fmt.Errorf("legacy convert: %s: unsupported shell %q", where, kind)
 	}
-	return taskrun.DynamicVar{Shell: &taskrun.ShellSpec{Name: shell, Script: translateLegacyTemplate(command, known, warn, where)}}, nil
+	return taskrun.DynamicVar{Shell: &taskrun.ShellSpec{Name: shell, Script: translateLegacyTemplate(command, known)}}, nil
 }
 
-func legacyScriptFile(name string, file LegacyScriptFile, baseDir string, warn func(string, ...any)) (taskrun.ScriptFile, error) {
+func legacyScriptFile(name string, file LegacyScriptFile, baseDir string) (taskrun.ScriptFile, error) {
 	path := file.Path
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(baseDir, path)
@@ -687,7 +687,7 @@ func legacyScriptFile(name string, file LegacyScriptFile, baseDir string, warn f
 //
 // Unknown names, $ENV_NAME lookups and shell constructs such as $$ are left
 // untouched, matching the legacy renderer fallback.
-func translateLegacyTemplate(text string, known map[string]bool, warn func(string, ...any), where string) string {
+func translateLegacyTemplate(text string, known map[string]bool) string {
 	if !strings.Contains(text, "$") {
 		return text
 	}

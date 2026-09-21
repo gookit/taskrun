@@ -721,14 +721,14 @@ func (s *runState) runHost(ctx context.Context, call *callState, scope *varScope
 		}
 		args[i] = cloneData(arg)
 	}
-	call_ := HostCall{
+	hostCall := HostCall{
 		Name: step.Host.Name,
 		Args: args,
 		Vars: scope.visibleVars(),
 		Env:  cloneStringMap(scope.env),
 		Dir:  scope.dir,
 	}
-	result, err := invokeHandler(ctx, handler, call_)
+	result, err := invokeHandler(ctx, handler, hostCall)
 	if err != nil {
 		classified := s.classify(err, call, scope.step, ErrKindHandler)
 		if step.IgnoreError {
@@ -969,8 +969,6 @@ func (s *runState) classify(err error, call *callState, step string, fallback Er
 		}
 		if out.Err == nil {
 			out.Err = err
-		} else if existing.Err == err {
-			out.Err = fallbackCause(err, fallback)
 		}
 		return &out
 	}
@@ -1022,8 +1020,6 @@ func kindOf(err error) ErrorKind {
 		return ErrKindExit
 	}
 }
-
-func fallbackCause(err error, fallback ErrorKind) error { return err }
 
 func (s *runState) sourceName() string {
 	if len(s.r.def.Sources) == 0 {

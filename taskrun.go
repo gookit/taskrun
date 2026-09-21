@@ -1,3 +1,10 @@
+// Package taskrun is an embeddable task and script runner.
+//
+// A Definition is validated and frozen by New, so later mutation of the caller's
+// maps cannot change a run. Each Run gets isolated variables, environment and
+// working directory; actions run through explicit shells or host handlers, and
+// the processes an action owns are terminated when its context is canceled or
+// its deadline expires.
 package taskrun
 
 import (

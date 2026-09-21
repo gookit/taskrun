@@ -21,7 +21,7 @@ func (t *posixTree) sysProcAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{Setpgid: true}
 }
 
-func (t *posixTree) attach(cmd *exec.Cmd) error { return nil }
+func (t *posixTree) attach(*exec.Cmd) error { return nil }
 
 func (t *posixTree) graceful(cmd *exec.Cmd) {
 	if cmd.Process == nil {
