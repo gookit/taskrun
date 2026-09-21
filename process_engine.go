@@ -19,6 +19,12 @@ type ProcessEngine struct {
 	// grace is how long a canceled process tree may exit on its own before it
 	// is killed. Zero falls back to DefaultKillGrace.
 	grace time.Duration
+	// TreeKill selects the behavior when the strongest available tree cleanup
+	// cannot be established. The zero value is TreeKillAuto.
+	TreeKill TreeKillMode
+	// skipJobObject is used by tests to exercise the fallback controller on a
+	// host where job objects work.
+	skipJobObject bool
 }
 
 // Execute implements Engine.
@@ -31,10 +37,10 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 	if err != nil {
 		return result, err
 	}
-	control, err := newTreeControl()
+	// The strongest controller is created up front; when it is unavailable the
+	// engine reports a start error unless TreeKillAuto allows the fallback.
+	control, err := e.treeControl()
 	if err != nil {
-		// The required child process cleanup capability is unavailable. Fail
-		// before starting instead of silently killing only the parent.
 		return result, &ProcessError{Kind: ErrKindStart, Err: errf("process tree cleanup is unavailable: %v", err)}
 	}
 	defer control.release()
@@ -67,9 +73,19 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 	}
 	result.Started = true
 	if err := control.attach(cmd); err != nil {
-		control.force(cmd)
-		_ = cmd.Wait()
-		return result, &ProcessError{Kind: ErrKindStart, Started: true, Err: errf("process tree cleanup is unavailable: %v", err)}
+		// The strongest mechanism is unavailable, for example because a
+		// restricted job already owns this process on a CI runner. TreeKillAuto
+		// switches to the parent-chain controller, which still terminates the
+		// whole tree; TreeKillRequired fails the action instead.
+		fallback, fallbackErr := newTreeControl(false)
+		if e.TreeKill == TreeKillRequired || fallbackErr != nil {
+			control.force(cmd)
+			_ = cmd.Wait()
+			return result, &ProcessError{Kind: ErrKindStart, Started: true, Err: errf("process tree cleanup is unavailable: %v", err)}
+		}
+		control.release()
+		control = fallback
+		defer control.release()
 	}
 
 	grace := e.grace
@@ -129,6 +145,25 @@ func (e ProcessEngine) Execute(ctx context.Context, action PreparedAction, strea
 		return result, &ProcessError{Kind: ErrKindExit, ExitCode: result.ExitCode, Started: true, Err: waitErr}
 	}
 	return result, nil
+}
+
+// treeControl returns the tree controller for this engine: the strongest
+// available one, or the parent-chain fallback when TreeKillAuto cannot use it.
+func (e ProcessEngine) treeControl() (treeControl, error) {
+	if e.skipJobObject {
+		// Test hook: pretend the owning mechanism is unavailable.
+		if e.TreeKill == TreeKillRequired {
+			return nil, errf("process tree job object is unavailable")
+		}
+		return newTreeControl(false)
+	}
+	control, err := newTreeControl(true)
+	if err != nil && e.TreeKill == TreeKillAuto {
+		// Creating the owning job failed; the parent-chain controller still
+		// terminates the tree.
+		return newTreeControl(false)
+	}
+	return control, err
 }
 
 func orErr(err error) error {

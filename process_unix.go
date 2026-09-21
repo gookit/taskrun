@@ -11,10 +11,11 @@ import (
 type syscallSysProcAttr = syscall.SysProcAttr
 
 // posixTree runs each child in its own process group so cancelation can signal
-// the whole tree instead of only the direct child.
+// the whole tree instead of only the direct child. Process groups are always
+// available, so the job flag is ignored.
 type posixTree struct{}
 
-func newTreeControl() (treeControl, error) { return &posixTree{}, nil }
+func newTreeControl(_ bool) (treeControl, error) { return &posixTree{}, nil }
 
 func (t *posixTree) sysProcAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{Setpgid: true}

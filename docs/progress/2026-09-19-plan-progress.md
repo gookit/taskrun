@@ -64,6 +64,33 @@ go test -count=1 ./pkg/kscript/... ./internal/biz/cmdbiz/  # 通过，含双引�
 - CI：`.github/workflows/go.yml`（组织模板，ubuntu × Go 1.23/1.24/1.25/stable）与
   `.github/workflows/race-and-windows.yml`（新增：ubuntu `-race`、windows build+vet+test）。
   本机目录暂无 C 编译器，windows 侧此前只有本地证据。
+
+CI 实测结论（仓库 `gookit/taskrun`，2026-09-21）：
+
+| 运行 | 结论 |
+|---|---|
+| `action-tests`（`go.yml`，Go 1.23/1.24/1.25/stable） | 通过（run #7） |
+| `race-and-windows` → Race detector（ubuntu，`go test -race`） | 通过（run #2） |
+| `race-and-windows` → Windows（build + vet + test） | run #2 在 `Run tests` 失败 |
+
+Windows 失败的根因（用 `gh run view --job <id> --log-failed` 读到）：
+
+```
+taskrun: start: process tree cleanup is unavailable:
+  AssignProcessToJobObject for pid 7328 failed: Access is denied.
+--- FAIL: TestConcurrentRunsAreIsolated
+```
+
+GitHub Actions 的 Windows runner 已经把它自己的 Job Object 套在步骤进程上，嵌套加入被拒绝。
+原实现按设计“能力不可用即失败”，结果在该环境下列库完全跑不起来。处置（同样达到设计意图：
+不允许只杀父进程）：
+
+- 新增 `TreeKillMode`：默认 `TreeKillAuto` 在拥有机制不可用时退化为按活动父进程链终止
+  （`taskkill /T /F /PID`），仍然清理子孙进程；`TreeKillRequired` 保留严格失败语义。
+- 创建 Job Object 失败与加入失败都走同一分层策略，且只在 `TreeKillAuto` 下回退。
+- 进程树测试拆成两个子用例（拥有机制 / 父进程链回退），两条路径都真实执行并通过；
+  另加 `TestTreeKillRequiredFailsWithoutTheOwningMechanism` 覆盖严格模式。
+- Linux 侧不受影响：进程组始终可用（race job 已连续两次通过）。
 - 第二真实应用接入与结果记录（T10）。
 
 ## 设计验收矩阵覆盖情况

@@ -69,7 +69,13 @@ type windowsTree struct {
 	handle syscall.Handle
 }
 
-func newTreeControl() (treeControl, error) {
+// newTreeControl builds the strongest available tree controller. When useJob is
+// false it returns the parent-chain controller directly, which is what the
+// engine falls back to in TreeKillAuto mode.
+func newTreeControl(useJob bool) (treeControl, error) {
+	if !useJob {
+		return &windowsTaskkillTree{}, nil
+	}
 	handle, _, err := procCreateJobObjectW.Call(0, 0)
 	if handle == 0 {
 		return nil, errf("CreateJobObject failed: %v", err)
@@ -88,6 +94,40 @@ func newTreeControl() (treeControl, error) {
 		return nil, errf("SetInformationJobObject failed: %v", err)
 	}
 	return &windowsTree{handle: job}, nil
+}
+
+// windowsTaskkillTree terminates the tree by walking live parent process ids
+// with taskkill. It is the fallback for environments where the process cannot be
+// assigned to a job object, for example when a restricted job already owns it on
+// CI runners. The whole tree is still terminated.
+type windowsTaskkillTree struct{}
+
+func (t *windowsTaskkillTree) sysProcAttr() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{CreationFlags: createNewProcessGroup}
+}
+
+func (t *windowsTaskkillTree) attach(*exec.Cmd) error { return nil }
+
+func (t *windowsTaskkillTree) graceful(cmd *exec.Cmd) {
+	if cmd.Process == nil {
+		return
+	}
+	_, _, _ = procGenerateConsoleCtrlEvent.Call(uintptr(ctrlBreakEvent), uintptr(cmd.Process.Pid))
+}
+
+func (t *windowsTaskkillTree) force(cmd *exec.Cmd) { taskkillTree(cmd) }
+
+func (t *windowsTaskkillTree) release() {}
+
+// taskkillTree kills a process and its descendants through their live parent
+// chain.
+func taskkillTree(cmd *exec.Cmd) {
+	if cmd.Process == nil {
+		return
+	}
+	kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid))
+	kill.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = kill.Run()
 }
 
 func (t *windowsTree) sysProcAttr() *syscall.SysProcAttr {
@@ -126,17 +166,12 @@ func (t *windowsTree) force(cmd *exec.Cmd) {
 	if t.handle != 0 {
 		_, _, _ = procTerminateJobObject.Call(uintptr(t.handle), 1)
 	}
-	if cmd.Process == nil {
-		return
-	}
 	// Belt and braces: a descendant created in the short window between
 	// CreateProcess and AssignProcessToJobObject is not owned by the job, so the
 	// tree is also killed by walking parent process ids. taskkill walks the live
 	// parent chain, which still contains such a descendant while the direct child
 	// is alive.
-	kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid))
-	kill.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	_ = kill.Run()
+	taskkillTree(cmd)
 }
 
 func (t *windowsTree) release() {

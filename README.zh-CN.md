@@ -160,8 +160,10 @@ Deferred。
   `Result.Status` 为 `canceled` 或 `timed_out`，返回的 `RunError` 保留
   `context.Canceled` / `context.DeadlineExceeded`。
 - 默认引擎拥有整棵进程树：POSIX 子进程独立进程组，Windows 子进程加入 Job Object。
-  取消时先请求退出，超过宽限期后强制终止。平台能力不可用时，动作在启动前直接失败，
-  不会静默退化为只杀父进程。
+  取消时先请求退出，超过宽限期后强制终止。若拥有机制无法建立（例如 CI runner 已有的受限
+  Job Object 拒绝嵌套加入），引擎退化为按活动父进程链终止整棵树，仍然会清理子孙进程而不是
+  只杀父进程。需要严格保证时可用 `WithEngine(ProcessEngine{TreeKill: TreeKillRequired})`
+  让动作直接失败而不再回退。
 - `IO.CaptureLimit` 限制每路流收集的字节数。设置 writer 时会同时转发与收集；超过上限后
   停止收集并标记截断，但继续排空，避免子进程阻塞。writer 返回错误会终止该动作并作为 IO
   错误上报。`CaptureLimit` 为 0 表示只转发不收集，负值非法。

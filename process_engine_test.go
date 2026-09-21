@@ -182,6 +182,25 @@ func TestZeroTimeoutInheritsParentBudget(t *testing.T) {
 // owned descendant running: the grandchild would create the marker file only
 // after 2 seconds, which must never happen once the tree is killed.
 func TestProcessTreeIsKilled(t *testing.T) {
+	// The job object owns the tree on Windows; the fallback controller walks
+	// live parent process ids instead (the path CI runners force, because their
+	// own job object rejects a nested assignment). Both must kill the tree.
+	cases := []struct {
+		name   string
+		engine Engine
+	}{
+		{"owning controller", ProcessEngine{}},
+		{"parent chain fallback", ProcessEngine{skipJobObject: true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertProcessTreeIsKilled(t, tc.engine)
+		})
+	}
+}
+
+func assertProcessTreeIsKilled(t *testing.T, engine Engine) {
+	t.Helper()
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "marker")
 	script := writeTreeScript(t, dir, marker)
@@ -190,7 +209,7 @@ func TestProcessTreeIsKilled(t *testing.T) {
 			Dir:   dir,
 			Shell: &ShellSpec{Name: shellForTest(), Script: script},
 		}}}},
-	})
+	}, WithEngine(engine))
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		time.Sleep(500 * time.Millisecond)
@@ -204,6 +223,19 @@ func TestProcessTreeIsKilled(t *testing.T) {
 	time.Sleep(4 * time.Second)
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatalf("descendant process survived cancellation and wrote %s", marker)
+	}
+}
+
+// TestTreeKillRequiredFailsWithoutTheOwningMechanism covers the strict mode: a
+// host that cannot establish the strongest cleanup fails the action instead of
+// falling back.
+func TestTreeKillRequiredFailsWithoutTheOwningMechanism(t *testing.T) {
+	r := newTestRunner(t, Definition{
+		Tasks: map[string]Task{"t": {Steps: []Step{{Exec: &ExecSpec{Program: "go", Args: []string{"version"}}}}}},
+	}, WithEngine(ProcessEngine{skipJobObject: true, TreeKill: TreeKillRequired}))
+	_, err := r.Run(context.Background(), Request{Task: "t"})
+	if err == nil || !errors.Is(err, ErrStart) {
+		t.Fatalf("err=%v", err)
 	}
 }
 

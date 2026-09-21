@@ -173,9 +173,12 @@ never runs a dynamic variable command: it reports those fields as deferred.
   `context.Canceled` / `context.DeadlineExceeded`.
 - The default engine owns a process tree: POSIX children run in their own
   process group, Windows children in a Job Object. A canceled tree is asked to
-  stop, then killed after the grace period. If the platform capability is
-  unavailable, the action fails before starting instead of killing only the
-  parent.
+  stop, then killed after the grace period. When the owning mechanism cannot be
+  established (for example a restricted job object already owns the process on
+  a CI runner), the engine falls back to terminating the tree through live
+  parent process ids, which still kills descendants rather than only the
+  parent. Set `WithEngine(ProcessEngine{TreeKill: TreeKillRequired})` to fail
+  the action instead of falling back.
 - `IO.CaptureLimit` bounds the collected bytes per stream. With a writer set,
   output is both forwarded and captured; after the bound, collection stops and
   output is marked truncated but keeps draining. A writer error terminates the

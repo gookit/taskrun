@@ -7,6 +7,11 @@ SemVer; versions before v1 are experimental and may change the API.
 
 ### Changed
 
+- Windows tree cleanup degrades instead of failing when the owning mechanism is
+  unavailable: if `AssignProcessToJobObject` is denied (a restricted job already
+  owns the process, as on GitHub Actions runners), the engine terminates the tree
+  through live parent process ids, so descendants are still killed. Set
+  `ProcessEngine{TreeKill: TreeKillRequired}` to fail the action instead.
 - Module renamed from `github.com/gookit/kscript` to `github.com/gookit/taskrun`
   (package `taskrun`) before the first release. The `k` prefix was a Kite
   leftover, and the old name collided with the legacy `pkg/kscript` package in
