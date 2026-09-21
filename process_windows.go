@@ -1,6 +1,6 @@
 //go:build windows
 
-package kscript
+package taskrun
 
 import (
 	"os/exec"

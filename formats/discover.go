@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 // DiscoverMode selects how far discovery walks.
@@ -123,13 +123,13 @@ func Discover(opts DiscoverOptions) ([]string, error) {
 }
 
 // DiscoverAndLoad discovers files and merges them in load order.
-func DiscoverAndLoad(opts DiscoverOptions, override bool) (kscript.Definition, error) {
+func DiscoverAndLoad(opts DiscoverOptions, override bool) (taskrun.Definition, error) {
 	files, err := Discover(opts)
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if len(files) == 0 {
-		return kscript.Definition{}, fmt.Errorf("discover: no task file found from %s", opts.StartDir)
+		return taskrun.Definition{}, fmt.Errorf("discover: no task file found from %s", opts.StartDir)
 	}
 	return LoadFiles(files, override)
 }

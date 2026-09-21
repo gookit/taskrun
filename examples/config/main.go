@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gookit/kscript"
-	"github.com/gookit/kscript/formats"
+	"github.com/gookit/taskrun"
+	"github.com/gookit/taskrun/formats"
 )
 
 func main() {
@@ -22,13 +22,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("load: %v", err)
 	}
-	runner, err := kscript.New(def)
+	runner, err := taskrun.New(def)
 	if err != nil {
 		log.Fatalf("new runner: %v", err)
 	}
-	result, err := runner.Run(context.Background(), kscript.Request{
+	result, err := runner.Run(context.Background(), taskrun.Request{
 		Task: *taskName,
-		IO:   kscript.IO{Stdout: os.Stdout, Stderr: os.Stderr},
+		IO:   taskrun.IO{Stdout: os.Stdout, Stderr: os.Stderr},
 	})
 	if err != nil {
 		log.Fatalf("run: %v", err)
@@ -36,13 +36,13 @@ func main() {
 	log.Printf("status=%s steps=%d", result.Status, len(result.Steps))
 }
 
-func load(config string) (kscript.Definition, error) {
+func load(config string) (taskrun.Definition, error) {
 	if config != "" {
 		return formats.LoadFile(config)
 	}
 	dir, err := os.Getwd()
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	// Discovery is explicit: names, start directory and mode come from the
 	// caller, and only the levels described here are inspected.
@@ -53,7 +53,7 @@ func load(config string) (kscript.Definition, error) {
 		MaxDepth: 4,
 	})
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if len(files) == 0 {
 		fallback := filepath.Join(dir, "examples", "basic.json")

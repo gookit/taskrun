@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 func main() {
@@ -18,46 +18,46 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	runner, err := kscript.New(kscript.Definition{
+	runner, err := taskrun.New(taskrun.Definition{
 		Version: 1,
 		BaseDir: dir,
 		Vars:    map[string]any{"announce": true},
-		Tasks: map[string]kscript.Task{
+		Tasks: map[string]taskrun.Task{
 			"report": {
 				Desc: "call back into the application",
-				DynamicVars: map[string]kscript.DynamicVar{
-					"revision": {Exec: &kscript.ExecSpec{Program: "go", Args: []string{"env", "GOOS"}}},
+				DynamicVars: map[string]taskrun.DynamicVar{
+					"revision": {Exec: &taskrun.ExecSpec{Program: "go", Args: []string{"env", "GOOS"}}},
 				},
 				If: "vars.announce == true",
-				Steps: []kscript.Step{
+				Steps: []taskrun.Step{
 					// The handler receives rendered arguments, isolated vars, env
 					// and the effective directory. It must respect ctx.
-					{Name: "notify", Host: &kscript.HostSpec{
+					{Name: "notify", Host: &taskrun.HostSpec{
 						Name: "app.notify",
 						Args: []any{"platform=${vars.revision}"},
 					}},
 				},
 			},
 		},
-	}, kscript.WithHandler("app.notify", func(ctx context.Context, call kscript.HostCall) (kscript.ActionResult, error) {
+	}, taskrun.WithHandler("app.notify", func(ctx context.Context, call taskrun.HostCall) (taskrun.ActionResult, error) {
 		select {
 		case <-ctx.Done():
-			return kscript.ActionResult{}, ctx.Err()
+			return taskrun.ActionResult{}, ctx.Err()
 		default:
 		}
 		message := fmt.Sprintf("%v", call.Args[0])
 		fmt.Printf("handler %s: %s (dir=%s)\n", call.Name, message, call.Dir)
-		return kscript.ActionResult{Started: true, Output: []byte(message + "\n")}, nil
-	}), kscript.WithBaseEnv(map[string]string{"PATH": os.Getenv("PATH")}))
+		return taskrun.ActionResult{Started: true, Output: []byte(message + "\n")}, nil
+	}), taskrun.WithBaseEnv(map[string]string{"PATH": os.Getenv("PATH")}))
 	if err != nil {
 		log.Fatalf("new runner: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	result, err := runner.Run(ctx, kscript.Request{
+	result, err := runner.Run(ctx, taskrun.Request{
 		Task: "report",
-		IO:   kscript.IO{Stdout: os.Stdout, Stderr: os.Stderr},
+		IO:   taskrun.IO{Stdout: os.Stdout, Stderr: os.Stderr},
 	})
 	if err != nil {
 		log.Fatalf("run: %v", err)

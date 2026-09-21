@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 // fullYAML is the schema documented by the design, including steps, files,
@@ -137,13 +137,13 @@ func TestDesignDefinitionIsAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner, err := kscript.New(def, kscript.WithHandler("app.check", func(context.Context, kscript.HostCall) (kscript.ActionResult, error) {
-		return kscript.ActionResult{}, nil
+	runner, err := taskrun.New(def, taskrun.WithHandler("app.check", func(context.Context, taskrun.HostCall) (taskrun.ActionResult, error) {
+		return taskrun.ActionResult{}, nil
 	}))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	plan, err := runner.Inspect(context.Background(), kscript.Request{Task: "check"})
+	plan, err := runner.Inspect(context.Background(), taskrun.Request{Task: "check"})
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}

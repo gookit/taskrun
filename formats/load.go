@@ -13,7 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/goccy/go-yaml"
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 // Format names accepted by Load.
@@ -26,39 +26,39 @@ const (
 // Load decodes one document. baseDir must be an absolute directory: relative
 // script paths resolve against it and the value is recorded as the source base
 // directory.
-func Load(ext string, reader io.Reader, source, baseDir string) (kscript.Definition, error) {
+func Load(ext string, reader io.Reader, source, baseDir string) (taskrun.Definition, error) {
 	format, err := formatOf(ext)
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if !filepath.IsAbs(baseDir) {
-		return kscript.Definition{}, fmt.Errorf("load %s: baseDir %q must be an absolute path", source, baseDir)
+		return taskrun.Definition{}, fmt.Errorf("load %s: baseDir %q must be an absolute path", source, baseDir)
 	}
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return kscript.Definition{}, fmt.Errorf("load %s: %w", source, err)
+		return taskrun.Definition{}, fmt.Errorf("load %s: %w", source, err)
 	}
 	raw, err := decodeDocument(format, data)
 	if err != nil {
-		return kscript.Definition{}, fmt.Errorf("load %s: %w", source, err)
+		return taskrun.Definition{}, fmt.Errorf("load %s: %w", source, err)
 	}
 	def, err := decodeDefinition(raw, source, baseDir, format)
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	return def, nil
 }
 
 // LoadFile decodes a file, using its extension to select the format. The
 // directory of path becomes the absolute source base directory.
-func LoadFile(path string) (kscript.Definition, error) {
+func LoadFile(path string) (taskrun.Definition, error) {
 	baseDir, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
-		return kscript.Definition{}, fmt.Errorf("load %s: %w", path, err)
+		return taskrun.Definition{}, fmt.Errorf("load %s: %w", path, err)
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return kscript.Definition{}, fmt.Errorf("load %s: %w", path, err)
+		return taskrun.Definition{}, fmt.Errorf("load %s: %w", path, err)
 	}
 	defer file.Close()
 	return Load(filepath.Ext(path), file, path, baseDir)
@@ -68,12 +68,12 @@ func LoadFile(path string) (kscript.Definition, error) {
 // are an error unless override is true, in which case the later definition
 // replaces the whole task. Variables and environment defaults are always
 // overridden by key.
-func LoadFiles(paths []string, override bool) (kscript.Definition, error) {
-	defs := make([]kscript.Definition, 0, len(paths))
+func LoadFiles(paths []string, override bool) (taskrun.Definition, error) {
+	defs := make([]taskrun.Definition, 0, len(paths))
 	for _, path := range paths {
 		def, err := LoadFile(path)
 		if err != nil {
-			return kscript.Definition{}, err
+			return taskrun.Definition{}, err
 		}
 		defs = append(defs, def)
 	}
@@ -81,17 +81,17 @@ func LoadFiles(paths []string, override bool) (kscript.Definition, error) {
 }
 
 // Merge combines decoded definitions in input order.
-func Merge(defs []kscript.Definition, override bool) (kscript.Definition, error) {
+func Merge(defs []taskrun.Definition, override bool) (taskrun.Definition, error) {
 	if len(defs) == 0 {
-		return kscript.Definition{}, fmt.Errorf("merge: no definitions")
+		return taskrun.Definition{}, fmt.Errorf("merge: no definitions")
 	}
-	out := kscript.Definition{
+	out := taskrun.Definition{
 		Version: 1,
 		BaseDir: defs[0].BaseDir,
 		Vars:    map[string]any{},
 		Env:     map[string]string{},
-		Tasks:   map[string]kscript.Task{},
-		Files:   map[string]kscript.ScriptFile{},
+		Tasks:   map[string]taskrun.Task{},
+		Files:   map[string]taskrun.ScriptFile{},
 	}
 	origins := map[string]string{}
 	for _, def := range defs {
@@ -109,7 +109,7 @@ func Merge(defs []kscript.Definition, override bool) (kscript.Definition, error)
 		}
 		for name, task := range def.Tasks {
 			if previous, exists := origins[name]; exists && !override {
-				return kscript.Definition{}, fmt.Errorf("merge: task %q is defined by both %s and %s; enable override to replace it",
+				return taskrun.Definition{}, fmt.Errorf("merge: task %q is defined by both %s and %s; enable override to replace it",
 					name, previous, sourceLabel(def))
 			}
 			origins[name] = sourceLabel(def)
@@ -117,7 +117,7 @@ func Merge(defs []kscript.Definition, override bool) (kscript.Definition, error)
 		}
 		for name, file := range def.Files {
 			if previous, exists := origins["file:"+name]; exists && !override {
-				return kscript.Definition{}, fmt.Errorf("merge: script file %q is defined by both %s and %s; enable override to replace it",
+				return taskrun.Definition{}, fmt.Errorf("merge: script file %q is defined by both %s and %s; enable override to replace it",
 					name, previous, sourceLabel(def))
 			}
 			origins["file:"+name] = sourceLabel(def)
@@ -127,7 +127,7 @@ func Merge(defs []kscript.Definition, override bool) (kscript.Definition, error)
 	return out, nil
 }
 
-func sourceLabel(def kscript.Definition) string {
+func sourceLabel(def taskrun.Definition) string {
 	if len(def.Sources) == 0 {
 		return "<unknown>"
 	}

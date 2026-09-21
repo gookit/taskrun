@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 func main() {
@@ -15,14 +15,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	runner, err := kscript.New(kscript.Definition{
+	runner, err := taskrun.New(taskrun.Definition{
 		Version: 1,
 		BaseDir: dir,
-		Tasks: map[string]kscript.Task{
+		Tasks: map[string]taskrun.Task{
 			"check": {
 				Desc: "show the Go toolchain version",
-				Steps: []kscript.Step{
-					{Name: "go-version", Exec: &kscript.ExecSpec{Program: "go", Args: []string{"version"}}},
+				Steps: []taskrun.Step{
+					{Name: "go-version", Exec: &taskrun.ExecSpec{Program: "go", Args: []string{"version"}}},
 				},
 			},
 		},
@@ -31,7 +31,7 @@ func main() {
 		log.Fatalf("new runner: %v", err)
 	}
 
-	plan, err := runner.Inspect(context.Background(), kscript.Request{Task: "check"})
+	plan, err := runner.Inspect(context.Background(), taskrun.Request{Task: "check"})
 	if err != nil {
 		log.Fatalf("inspect: %v", err)
 	}
@@ -39,9 +39,9 @@ func main() {
 		log.Printf("planned: %s %s %v", action.Kind, action.Program, action.Args)
 	}
 
-	result, err := runner.Run(context.Background(), kscript.Request{
+	result, err := runner.Run(context.Background(), taskrun.Request{
 		Task: "check",
-		IO:   kscript.IO{Stdout: os.Stdout, Stderr: os.Stderr},
+		IO:   taskrun.IO{Stdout: os.Stdout, Stderr: os.Stderr},
 	})
 	if err != nil {
 		log.Fatalf("run: %v", err)

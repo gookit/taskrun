@@ -5,6 +5,13 @@ SemVer; versions before v1 are experimental and may change the API.
 
 ## [Unreleased]
 
+### Changed
+
+- Module renamed from `github.com/gookit/kscript` to `github.com/gookit/taskrun`
+  (package `taskrun`) before the first release. The `k` prefix was a Kite
+  leftover, and the old name collided with the legacy `pkg/kscript` package in
+  kite-go, which forced an import alias in the migration bridge.
+
 ### Added
 
 - `Definition`, `Task`, `Step`, `Request`, `IO`, `Result`, `Plan`, `Engine` and
@@ -34,5 +41,5 @@ SemVer; versions before v1 are experimental and may change the API.
   unknown-field and duplicate-key rejection, source and field-path errors,
   explicit `nearest`/`ancestors` discovery, multi-source merging and the legacy
   Kite task map converter.
-- `cmd/kscript` CLI consumer and `examples/basic`, `examples/config`,
+- `cmd/taskrun` CLI consumer and `examples/basic`, `examples/config`,
   `examples/host` runnable examples.

@@ -1,4 +1,4 @@
-package kscript
+package taskrun
 
 import (
 	"context"
@@ -15,7 +15,7 @@ func TestEnvValuesAreRendered(t *testing.T) {
 	runner := newTestRunner(t, Definition{
 		Env: map[string]string{"KS_DEFINED": "${vars.project}"},
 		Vars: map[string]any{
-			"project": "kscript",
+			"project": "taskrun",
 		},
 		Tasks: map[string]Task{"t": {
 			Vars: map[string]any{"target": "./..."},
@@ -32,9 +32,9 @@ func TestEnvValuesAreRendered(t *testing.T) {
 	mustRun(t, runner, Request{Task: "t", Env: map[string]string{"KS_REQUEST": "${vars.target}-request"}})
 	want := map[string]string{
 		"KS_BASE":    "base",
-		"KS_DEFINED": "kscript",
+		"KS_DEFINED": "taskrun",
 		"KS_LABEL":   "./...",
-		"KS_LOWER":   "[kscript]",
+		"KS_LOWER":   "[taskrun]",
 		"KS_STEP":    "./...-step",
 		"KS_REQUEST": "./...-request",
 	}

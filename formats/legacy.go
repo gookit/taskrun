@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 // LegacyOptions configures the conversion of a historical Kite task map. The
@@ -55,15 +55,15 @@ type LegacyScriptFile struct {
 // aliases or plugin support, so the Kite adapter can report it instead of
 // silently dropping semantics.
 type LegacyResult struct {
-	Definition kscript.Definition
+	Definition taskrun.Definition
 	Warnings   []string
 }
 
 // LegacyMap converts a legacy script map with default options.
-func LegacyMap(scripts map[string]any, baseDir string) (kscript.Definition, error) {
+func LegacyMap(scripts map[string]any, baseDir string) (taskrun.Definition, error) {
 	result, err := LegacyDefinition(LegacyOptions{Scripts: scripts, BaseDir: baseDir})
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	return result.Definition, nil
 }
@@ -81,13 +81,13 @@ func LegacyDefinition(opts LegacyOptions) (LegacyResult, error) {
 	warn := func(format string, args ...any) {
 		result.Warnings = append(result.Warnings, fmt.Sprintf(format, args...))
 	}
-	def := kscript.Definition{
+	def := taskrun.Definition{
 		Version: 1,
 		BaseDir: opts.BaseDir,
 		Vars:    map[string]any{},
 		Env:     map[string]string{},
-		Tasks:   map[string]kscript.Task{},
-		Files:   map[string]kscript.ScriptFile{},
+		Tasks:   map[string]taskrun.Task{},
+		Files:   map[string]taskrun.ScriptFile{},
 	}
 	settings := map[string]any{}
 	if raw, ok := opts.Scripts["__settings"]; ok {
@@ -139,7 +139,7 @@ func LegacyDefinition(opts LegacyOptions) (LegacyResult, error) {
 
 // legacyKnownNames collects every name the legacy renderer could resolve, so
 // template translation only rewrites references that really are variables.
-func legacyKnownNames(def kscript.Definition, opts LegacyOptions) map[string]bool {
+func legacyKnownNames(def taskrun.Definition, opts LegacyOptions) map[string]bool {
 	known := map[string]bool{}
 	for name := range def.Vars {
 		known[name] = true
@@ -161,7 +161,7 @@ func legacyKnownNames(def kscript.Definition, opts LegacyOptions) map[string]boo
 	return known
 }
 
-func applyLegacySettings(def *kscript.Definition, settings map[string]any, warn func(string, ...any)) error {
+func applyLegacySettings(def *taskrun.Definition, settings map[string]any, warn func(string, ...any)) error {
 	if len(settings) == 0 {
 		return nil
 	}
@@ -210,8 +210,8 @@ func applyLegacySettings(def *kscript.Definition, settings map[string]any, warn 
 	return nil
 }
 
-func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool, warn func(string, ...any)) (kscript.Task, error) {
-	task := kscript.Task{Name: name}
+func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool, warn func(string, ...any)) (taskrun.Task, error) {
+	task := taskrun.Task{Name: name}
 	switch value := raw.(type) {
 	case string:
 		steps, err := legacyCommands(name, value, opts.DefaultShell, known, warn)
@@ -283,7 +283,7 @@ func legacyTask(name string, raw any, opts LegacyOptions, known map[string]bool,
 	}
 	if vars, ok := legacyAnyMap(value, "vars"); ok {
 		static := map[string]any{}
-		dynamic := map[string]kscript.DynamicVar{}
+		dynamic := map[string]taskrun.DynamicVar{}
 		for key, item := range vars {
 			text, isText := item.(string)
 			if !isText {
@@ -364,7 +364,7 @@ func legacyRunValue(value map[string]any) (any, bool) {
 	return nil, false
 }
 
-func legacyCommands(taskName string, raw any, shell string, known map[string]bool, warn func(string, ...any)) ([]kscript.Step, error) {
+func legacyCommands(taskName string, raw any, shell string, known map[string]bool, warn func(string, ...any)) ([]taskrun.Step, error) {
 	var items []any
 	switch value := raw.(type) {
 	case string:
@@ -378,7 +378,7 @@ func legacyCommands(taskName string, raw any, shell string, known map[string]boo
 	default:
 		return nil, fmt.Errorf("legacy convert: task %q commands must be a string or list, got %T", taskName, raw)
 	}
-	steps := make([]kscript.Step, 0, len(items))
+	steps := make([]taskrun.Step, 0, len(items))
 	for index, item := range items {
 		switch value := item.(type) {
 		case string:
@@ -423,7 +423,7 @@ func legacyCommands(taskName string, raw any, shell string, known map[string]boo
 			if strings.HasPrefix(strings.TrimSpace(run), "@task:") {
 				target = strings.TrimSpace(run[len("@task:"):])
 			}
-			step := kscript.Step{Name: legacyStepName(name, index), Task: &kscript.TaskCall{Name: target, ForwardArgs: true}}
+			step := taskrun.Step{Name: legacyStepName(name, index), Task: &taskrun.TaskCall{Name: target, ForwardArgs: true}}
 			applyLegacyExtras(&step, extra)
 			steps = append(steps, step)
 		default:
@@ -436,7 +436,7 @@ func legacyCommands(taskName string, raw any, shell string, known map[string]boo
 // legacyCommandExtras carries the per-command settings the new step model owns.
 type legacyCommandExtras struct {
 	Vars        map[string]any
-	DynamicVars map[string]kscript.DynamicVar
+	DynamicVars map[string]taskrun.DynamicVar
 	Env         map[string]string
 	Dir         string
 	If          string
@@ -477,7 +477,7 @@ func legacyCommandExtrasOf(value map[string]any, taskName string, index int, kno
 	}
 	if vars, ok := legacyAnyMap(value, "vars"); ok {
 		static := map[string]any{}
-		dynamic := map[string]kscript.DynamicVar{}
+		dynamic := map[string]taskrun.DynamicVar{}
 		for key, item := range vars {
 			text, isText := item.(string)
 			if !isText {
@@ -509,7 +509,7 @@ func legacyCommandExtrasOf(value map[string]any, taskName string, index int, kno
 	return extras, nil
 }
 
-func applyLegacyExtras(step *kscript.Step, extras legacyCommandExtras) {
+func applyLegacyExtras(step *taskrun.Step, extras legacyCommandExtras) {
 	if extras.Vars != nil {
 		step.Vars = extras.Vars
 	}
@@ -535,19 +535,19 @@ func applyLegacyExtras(step *kscript.Step, extras legacyCommandExtras) {
 
 // legacyCommandStep converts one legacy command line. It returns nil for an
 // empty command, matching the legacy behavior of skipping blank entries.
-func legacyCommandStep(taskName string, index int, run, name string, extras legacyCommandExtras, shell string, known map[string]bool, warn func(string, ...any)) (*kscript.Step, error) {
+func legacyCommandStep(taskName string, index int, run, name string, extras legacyCommandExtras, shell string, known map[string]bool, warn func(string, ...any)) (*taskrun.Step, error) {
 	run = strings.TrimSpace(run)
 	if run == "" {
 		return nil, nil
 	}
 	label := legacyStepName(name, index)
 	where := fmt.Sprintf("task %s command #%d", taskName, index)
-	step := kscript.Step{Name: label}
+	step := taskrun.Step{Name: label}
 
 	// @task:name refers to another task and keeps its own call semantics.
 	if strings.HasPrefix(run, "@task:") {
 		target := strings.TrimSpace(run[len("@task:"):])
-		step.Task = &kscript.TaskCall{Name: target, ForwardArgs: true}
+		step.Task = &taskrun.TaskCall{Name: target, ForwardArgs: true}
 		applyLegacyExtras(&step, extras)
 		return &step, nil
 	}
@@ -576,7 +576,7 @@ func legacyCommandStep(taskName string, index int, run, name string, extras lega
 		if program == "" {
 			return nil, nil
 		}
-		step.Exec = &kscript.ExecSpec{Program: program, Args: args}
+		step.Exec = &taskrun.ExecSpec{Program: program, Args: args}
 	case "exec":
 		program, args, err := legacySplitCommandLine(translated)
 		if err != nil {
@@ -585,9 +585,9 @@ func legacyCommandStep(taskName string, index int, run, name string, extras lega
 		if program == "" {
 			return nil, nil
 		}
-		step.Exec = &kscript.ExecSpec{Program: program, Args: args}
+		step.Exec = &taskrun.ExecSpec{Program: program, Args: args}
 	default:
-		step.Shell = &kscript.ShellSpec{Name: legacyShellName(shell), Script: translated}
+		step.Shell = &taskrun.ShellSpec{Name: legacyShellName(shell), Script: translated}
 	}
 	applyLegacyExtras(&step, extras)
 	return &step, nil
@@ -632,25 +632,25 @@ func legacyDynamicVar(value string) (kind, command string, ok bool) {
 	return kind, strings.TrimSpace(value[pos+1:]), true
 }
 
-func legacyDynamicSpec(kind, command, defaultShell string, known map[string]bool, warn func(string, ...any), where string) (kscript.DynamicVar, error) {
+func legacyDynamicSpec(kind, command, defaultShell string, known map[string]bool, warn func(string, ...any), where string) (taskrun.DynamicVar, error) {
 	if kind == "exec" {
 		program, args, err := legacySplitCommandLine(translateLegacyTemplate(command, known, warn, where))
 		if err != nil {
-			return kscript.DynamicVar{}, fmt.Errorf("legacy convert: %s: %w", where, err)
+			return taskrun.DynamicVar{}, fmt.Errorf("legacy convert: %s: %w", where, err)
 		}
-		return kscript.DynamicVar{Exec: &kscript.ExecSpec{Program: program, Args: args}}, nil
+		return taskrun.DynamicVar{Exec: &taskrun.ExecSpec{Program: program, Args: args}}, nil
 	}
 	if kind == "" {
 		kind = defaultShell
 	}
 	shell := legacyShellName(kind)
 	if shell == "" {
-		return kscript.DynamicVar{}, fmt.Errorf("legacy convert: %s: unsupported shell %q", where, kind)
+		return taskrun.DynamicVar{}, fmt.Errorf("legacy convert: %s: unsupported shell %q", where, kind)
 	}
-	return kscript.DynamicVar{Shell: &kscript.ShellSpec{Name: shell, Script: translateLegacyTemplate(command, known, warn, where)}}, nil
+	return taskrun.DynamicVar{Shell: &taskrun.ShellSpec{Name: shell, Script: translateLegacyTemplate(command, known, warn, where)}}, nil
 }
 
-func legacyScriptFile(name string, file LegacyScriptFile, baseDir string, warn func(string, ...any)) (kscript.ScriptFile, error) {
+func legacyScriptFile(name string, file LegacyScriptFile, baseDir string, warn func(string, ...any)) (taskrun.ScriptFile, error) {
 	path := file.Path
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(baseDir, path)
@@ -664,16 +664,16 @@ func legacyScriptFile(name string, file LegacyScriptFile, baseDir string, warn f
 		bin = strings.TrimPrefix(ext, ".")
 	}
 	if bin == "" {
-		return kscript.ScriptFile{}, fmt.Errorf("legacy convert: script file %q has no interpreter", name)
+		return taskrun.ScriptFile{}, fmt.Errorf("legacy convert: script file %q has no interpreter", name)
 	}
 	program, prefix, err := legacySplitCommandLine(bin)
 	if err != nil {
-		return kscript.ScriptFile{}, fmt.Errorf("legacy convert: script file %q interpreter %q: %w", name, bin, err)
+		return taskrun.ScriptFile{}, fmt.Errorf("legacy convert: script file %q interpreter %q: %w", name, bin, err)
 	}
-	return kscript.ScriptFile{
+	return taskrun.ScriptFile{
 		Name:        name,
 		Path:        path,
-		Interpreter: kscript.Interpreter{Program: program, PrefixArgs: prefix},
+		Interpreter: taskrun.Interpreter{Program: program, PrefixArgs: prefix},
 	}, nil
 }
 

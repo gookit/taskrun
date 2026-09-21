@@ -1,4 +1,4 @@
-package kscript
+package taskrun
 
 import (
 	"context"
@@ -70,25 +70,25 @@ const (
 var (
 	// ErrNotFound reports that the requested root task name is unknown.
 	// A missing dependency is invalid_definition, not ErrNotFound.
-	ErrNotFound = errors.New("kscript: task not found")
+	ErrNotFound = errors.New("taskrun: task not found")
 	// ErrInvalidRequest reports a rejected Request.
-	ErrInvalidRequest = errors.New("kscript: invalid request")
+	ErrInvalidRequest = errors.New("taskrun: invalid request")
 	// ErrInvalidDefinition reports a rejected definition or reference.
-	ErrInvalidDefinition = errors.New("kscript: invalid definition")
+	ErrInvalidDefinition = errors.New("taskrun: invalid definition")
 	// ErrDependencyCycle reports a dependency or task-call cycle.
-	ErrDependencyCycle = errors.New("kscript: task dependency cycle")
+	ErrDependencyCycle = errors.New("taskrun: task dependency cycle")
 	// ErrExpansionLimit reports that the run exceeded its call budget.
-	ErrExpansionLimit = errors.New("kscript: task call expansion limit exceeded")
+	ErrExpansionLimit = errors.New("taskrun: task call expansion limit exceeded")
 	// ErrStart reports that a program could not be started.
-	ErrStart = errors.New("kscript: program start failed")
+	ErrStart = errors.New("taskrun: program start failed")
 	// ErrExit reports a non-zero process exit.
-	ErrExit = errors.New("kscript: non-zero exit")
+	ErrExit = errors.New("taskrun: non-zero exit")
 	// ErrHandler reports a host handler failure.
-	ErrHandler = errors.New("kscript: handler failed")
+	ErrHandler = errors.New("taskrun: handler failed")
 	// ErrOutputLimit reports captured output above its bound.
-	ErrOutputLimit = errors.New("kscript: output limit exceeded")
+	ErrOutputLimit = errors.New("taskrun: output limit exceeded")
 	// ErrIO reports a stream or capture failure.
-	ErrIO = errors.New("kscript: io failure")
+	ErrIO = errors.New("taskrun: io failure")
 )
 
 func kindMatches(kind ErrorKind, target error) bool {
@@ -135,7 +135,7 @@ type RunError struct {
 
 func (e *RunError) Error() string {
 	var b strings.Builder
-	b.WriteString("kscript: ")
+	b.WriteString("taskrun: ")
 	if e.Kind != "" {
 		b.WriteString(string(e.Kind))
 	} else {
@@ -189,9 +189,9 @@ type ProcessError struct {
 
 func (e *ProcessError) Error() string {
 	if e.Err == nil {
-		return "kscript: " + string(e.Kind)
+		return "taskrun: " + string(e.Kind)
 	}
-	return "kscript: " + string(e.Kind) + ": " + e.Err.Error()
+	return "taskrun: " + string(e.Kind) + ": " + e.Err.Error()
 }
 
 // Unwrap exposes the underlying cause.

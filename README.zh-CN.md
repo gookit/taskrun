@@ -1,14 +1,14 @@
-# kscript
+# taskrun
 
-`github.com/gookit/kscript` 是可嵌入 Go 应用的任务与脚本执行库。Go 1.23+ 应用无需初始化
+`github.com/gookit/taskrun` 是可嵌入 Go 应用的任务与脚本执行库。Go 1.23+ 应用无需初始化
 CLI 框架或全局状态，即可加载任务定义、查看执行计划、运行任务与脚本文件，并获得隔离、
 可取消、可分类的结构化结果。
 
 ## 快速开始
 
 ```bash
-go run ./cmd/kscript -config ./examples/basic.json -task hello
-go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run
+go run ./cmd/taskrun -config ./examples/basic.json -task hello
+go run ./cmd/taskrun -config ./examples/basic.json -task check -dry-run
 ```
 
 ```go
@@ -19,7 +19,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 func main() {
@@ -27,13 +27,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	runner, err := kscript.New(kscript.Definition{
+	runner, err := taskrun.New(taskrun.Definition{
 		Version: 1,
 		BaseDir: dir,
-		Tasks: map[string]kscript.Task{
+		Tasks: map[string]taskrun.Task{
 			"check": {
-				Steps: []kscript.Step{
-					{Exec: &kscript.ExecSpec{Program: "go", Args: []string{"version"}}},
+				Steps: []taskrun.Step{
+					{Exec: &taskrun.ExecSpec{Program: "go", Args: []string{"version"}}},
 				},
 			},
 		},
@@ -41,9 +41,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	result, err := runner.Run(context.Background(), kscript.Request{
+	result, err := runner.Run(context.Background(), taskrun.Request{
 		Task: "check",
-		IO:   kscript.IO{Stdout: os.Stdout, Stderr: os.Stderr},
+		IO:   taskrun.IO{Stdout: os.Stdout, Stderr: os.Stderr},
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -167,7 +167,7 @@ Deferred。
 `timed_out`、`skipped`、`dry_run`，与返回的 error 不会互相矛盾。`Result.Tasks` 记录每次
 任务调用（含跳过原因），`Result.Steps` 记录动作类型、启动状态、退出码、输出、截断与错误。
 
-失败返回 `*kscript.RunError`，包含 `Kind`、task、call id、step、source，并支持
+失败返回 `*taskrun.RunError`，包含 `Kind`、task、call id、step、source，并支持
 `errors.Is`/`errors.As` 匹配 `ErrNotFound`、`ErrInvalidRequest`、`ErrInvalidDefinition`、
 `ErrDependencyCycle`、`ErrExpansionLimit`、`ErrStart`、`ErrExit`、`ErrHandler`、
 `ErrOutputLimit`、`ErrIO`、`context.Canceled`、`context.DeadlineExceeded`。

@@ -1,4 +1,4 @@
-package kscript
+package taskrun
 
 import (
 	"os"

@@ -1,9 +1,9 @@
 <!-- template_id: design; template_version: 1.1.1 -->
-# github.com/gookit/kscript 独立任务脚本库设计
+# github.com/gookit/taskrun 独立任务脚本库设计
 
-> 状态：Draft 0.2 / 待设计批准
+> 状态：Draft 0.3 / 待设计批准
 >
-> 模块路径：`github.com/gookit/kscript`；主包名：`kscript`。
+> 模块路径：`github.com/gookit/taskrun`；主包名：`taskrun`。
 > 文档日期：2026-09-15；文档版本与未来 Go module 发布版本分别管理。
 > standards_binding: BOUND；工作区 `D:/work/inhere/my-tools-dev` 已绑定 IDEV-STD 0.19.0，profile=`go-tools`，revision=`9dc4a010355e1eb7a5c53f99558495df09eb9553`；使用 inhere-doc-workflow design 合同与模板 1.1.1。绑定验证通过不等于设计已获人工批准。
 
@@ -13,6 +13,7 @@
 |---|---|---|---|
 | 0.1 | 2026-09-15 | Codex | 建立独立库定位、公共 API、执行语义、Kite 兼容边界、分期范围和验收条件 |
 | 0.2 | 2026-09-15 | Codex | 绑定工作区 IDEV-STD；将 Go 基线改为 1.23+；把脚本定义条件判断纳入首期契约 |
+| 0.3 | 2026-09-21 | Codex | 按用户决定将模块路径改为 `github.com/gookit/taskrun`（主包 `taskrun`），并同步 D01：`kscript` 的 k 是 Kite 遗留前缀，且与 kite-go 旧包 `pkg/kscript` 同名会导致 import 别名 |
 
 仅在目标、范围、接口、行为、验收等语义变化时递增文档版本；状态与来源信息纠正不新增修订。
 
@@ -20,7 +21,7 @@
 
 Kite 已有 `pkg/kscript`，另一个 Go 应用也需要任务与脚本执行能力。继续通过 `github.com/inhere/kite-go/pkg/kscript` 引用，会使消费者受 Kite 模块的依赖图、版本节奏和 CLI 行为约束。本设计将其抽为可以独立发布、测试和嵌入的 Go 库。
 
-用户已确认模块路径 `github.com/gookit/kscript`，以及“抽离 + 完善、供多个 Go 应用使用”的方向。本次授权是编写设计；尚未创建新仓库、移动源码、改变依赖或发布版本。
+用户已确认模块路径 `github.com/gookit/taskrun`，以及“抽离 + 完善、供多个 Go 应用使用”的方向。本次授权是编写设计；尚未创建新仓库、移动源码、改变依赖或发布版本。
 
 目标使用结果：
 
@@ -35,7 +36,7 @@ Kite 已有 `pkg/kscript`，另一个 Go 应用也需要任务与脚本执行能
 | 项目 | 声明 |
 |---|---|
 | thinking_mode | RIGOROUS |
-| core_objective | 设计可独立引入的 kscript 库，覆盖抽离、可靠执行与两类应用接入 |
+| core_objective | 设计可独立引入的 taskrun 库，覆盖抽离、可靠执行与两类应用接入 |
 | scope freeze | 公共契约、格式边界、任务/脚本执行、Kite 迁移及验收 |
 | expansion_policy | DEFER_OR_REQUEST；新增语言 VM、调度服务、远程执行等进入后续候选 |
 | review budget | 本轮一次源码核对与一次文档一致性自检；无核心矛盾即交付 Draft；正式独立评审另行安排 |
@@ -62,7 +63,7 @@ Kite 已有 `pkg/kscript`，另一个 Go 应用也需要任务与脚本执行能
 
 ### 所有权与文档位置
 
-- 核心库归属拟建模块 `github.com/gookit/kscript`。
+- 核心库归属拟建模块 `github.com/gookit/taskrun`。
 - 现有消费者为 `github.com/inhere/kite-go`；第二个 Go 应用的项目路径、Go 最低版本和使用场景尚未提供。
 - 当前 `my-tools-dev` 与 `inhere-tools` 目录不是 Git 根，目标库也尚未落地。按范围未完全确定时优先项目级位置的约定，设计暂存在 Kite Git 仓库 `docs/design/`，作为抽离来源项目的设计。
 - 新库正式落地后，可将此设计迁入新库文档并在 Kite 保留指向；避免维护两个同时生效的设计副本。本轮不创建目标仓库或更改其他项目。
@@ -234,9 +235,9 @@ flowchart TB
 ### 包结构建议
 
 ```text
-github.com/gookit/kscript
+github.com/gookit/taskrun
 ├── go.mod
-├── kscript.go         # New、公共选项与类型
+├── taskrun.go         # New、公共选项与类型
 ├── definition.go      # Definition、Task、Step、File 与校验入口
 ├── runner.go          # Lookup、List、Inspect、Run
 ├── request.go         # Request、IO、HostData
@@ -317,7 +318,7 @@ import (
     "log"
     "os"
 
-    "github.com/gookit/kscript"
+    "github.com/gookit/taskrun"
 )
 
 func main() {
@@ -325,12 +326,12 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    runner, err := kscript.New(kscript.Definition{
+    runner, err := taskrun.New(taskrun.Definition{
         BaseDir: dir,
-        Tasks: map[string]kscript.Task{
+        Tasks: map[string]taskrun.Task{
             "check": {
-                Steps: []kscript.Step{
-                    {Exec: &kscript.ExecSpec{Program: "go", Args: []string{"version"}}},
+                Steps: []taskrun.Step{
+                    {Exec: &taskrun.ExecSpec{Program: "go", Args: []string{"version"}}},
                 },
             },
         },
@@ -338,9 +339,9 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    result, err := runner.Run(context.Background(), kscript.Request{
+    result, err := runner.Run(context.Background(), taskrun.Request{
         Task: "check",
-        IO: kscript.IO{Stdout: os.Stdout, Stderr: os.Stderr},
+        IO: taskrun.IO{Stdout: os.Stdout, Stderr: os.Stderr},
     })
     if err != nil {
         log.Fatal(err)
@@ -349,7 +350,7 @@ func main() {
 }
 ```
 
-示例中的 log.Fatal 是消费者行为；kscript 本身不终止进程。正式实现后，这个示例必须放在独立临时 module 中以真实版本验证，不能仅凭示意代码认定可用。
+示例中的 log.Fatal 是消费者行为；taskrun 本身不终止进程。正式实现后，这个示例必须放在独立临时 module 中以真实版本验证，不能仅凭示意代码认定可用。
 
 ## 关键流程
 
@@ -439,7 +440,7 @@ Inspect(req) 验证参数和静态引用、展开关系并生成 Plan；Request.
 
 | 当前接口/行为 | 迁移后归属 |
 |---|---|
-| kscript.NewRunner + 配置映射 | Kite 读取配置 → 兼容转换 → 新库 New；保留过渡包装，避免 CLI 一次性重写 |
+| taskrun.NewRunner + 配置映射 | Kite 读取配置 → 兼容转换 → 新库 New；保留过渡包装，避免 CLI 一次性重写 |
 | Scripts 的 string/list/map、__settings | Kite legacy converter，归一化为 Definition；来源和转换警告保留 |
 | .kite.task[s] / .kite.script[s] 自动发现 | Kite 显式传入 ancestors 发现策略与原名称，不成为独立库默认值 |
 | @task:name | 转为 task Step，保留顺序与重复调用 |
@@ -507,7 +508,7 @@ Kite 迁移前保留独立回退点；失败时退回依赖和适配提交，原
 
 | ID | 状态 | 内容与理由 |
 |---|---|---|
-| D01 | 用户已确认 | 模块路径 github.com/gookit/kscript，支持其他 Go 应用独立引入 |
+| D01 | 用户已确认（2026-09-21 改名） | 模块路径 github.com/gookit/taskrun，支持其他 Go 应用独立引入；原路径 github.com/gookit/kscript 因 k 前缀为 Kite 遗留、且与 kite-go 旧包 `pkg/kscript` 同名而改 |
 | D02 | 提案 | 一个主包和 formats 扩展包；内部实现可拆，不提前公开多层调度框架 |
 | D03 | 提案 | 类型化 Definition + 不可变 Runner + 每次 Request；适合 CLI 与服务并发使用 |
 | D04 | 提案 | 默认系统进程 Engine；显式 argv/Shell/file，保留可替换后端 seam |
@@ -532,7 +533,7 @@ Kite 迁移前保留独立回退点；失败时退回依赖和适配提交，原
 
 ## 结论与人工计划 Gate
 
-本设计建议将 kscript 定位为面向 Go 应用嵌入的任务脚本库：主包提供简单稳定入口，默认外部进程执行，统一定义、上下文、结果和错误，Kite 在边界适配旧格式与命令系统。
+本设计建议将 taskrun 定位为面向 Go 应用嵌入的任务脚本库：主包提供简单稳定入口，默认外部进程执行，统一定义、上下文、结果和错误，Kite 在边界适配旧格式与命令系统。
 
 首期以“独立可用且可靠”为完成标准，保留已存在的顺序依赖和任务调用，补齐必要的隔离、错误、取消和预览语义。完整构建工具、跨任务并行、语言 VM 和外部格式兼容属于后续候选。
 

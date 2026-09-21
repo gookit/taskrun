@@ -1,6 +1,6 @@
-# kscript
+# taskrun
 
-`github.com/gookit/kscript` is an embeddable Go task and script runner. A Go 1.23+
+`github.com/gookit/taskrun` is an embeddable Go task and script runner. A Go 1.23+
 application can load a task definition, inspect the plan, run tasks and script
 files, and get an isolated, cancelable, classified result without initializing a
 CLI framework or any global state.
@@ -8,8 +8,8 @@ CLI framework or any global state.
 ## Quick start
 
 ```bash
-go run ./cmd/kscript -config ./examples/basic.json -task hello
-go run ./cmd/kscript -config ./examples/basic.json -task check -dry-run
+go run ./cmd/taskrun -config ./examples/basic.json -task hello
+go run ./cmd/taskrun -config ./examples/basic.json -task check -dry-run
 ```
 
 ```go
@@ -20,7 +20,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 func main() {
@@ -28,13 +28,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	runner, err := kscript.New(kscript.Definition{
+	runner, err := taskrun.New(taskrun.Definition{
 		Version: 1,
 		BaseDir: dir,
-		Tasks: map[string]kscript.Task{
+		Tasks: map[string]taskrun.Task{
 			"check": {
-				Steps: []kscript.Step{
-					{Exec: &kscript.ExecSpec{Program: "go", Args: []string{"version"}}},
+				Steps: []taskrun.Step{
+					{Exec: &taskrun.ExecSpec{Program: "go", Args: []string{"version"}}},
 				},
 			},
 		},
@@ -42,9 +42,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	result, err := runner.Run(context.Background(), kscript.Request{
+	result, err := runner.Run(context.Background(), taskrun.Request{
 		Task: "check",
-		IO:   kscript.IO{Stdout: os.Stdout, Stderr: os.Stderr},
+		IO:   taskrun.IO{Stdout: os.Stdout, Stderr: os.Stderr},
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -184,7 +184,7 @@ returned error. `Result.Tasks` records every task call, including skipped calls
 and their reason, and `Result.Steps` records kind, start state, exit code,
 output, truncation and error per step.
 
-Failures return `*kscript.RunError` with `Kind`, task, call id, step and source,
+Failures return `*taskrun.RunError` with `Kind`, task, call id, step and source,
 and support `errors.Is`/`errors.As` against `ErrNotFound`,
 `ErrInvalidRequest`, `ErrInvalidDefinition`, `ErrDependencyCycle`,
 `ErrExpansionLimit`, `ErrStart`, `ErrExit`, `ErrHandler`, `ErrOutputLimit`,

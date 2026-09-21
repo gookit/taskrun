@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 // legacyFixture mirrors a real Kite task file: task settings, shorthand task
@@ -212,11 +212,11 @@ func TestLegacyTemplateTranslation(t *testing.T) {
 func TestLegacyConvertedDefinitionValidatesAndRuns(t *testing.T) {
 	base := t.TempDir()
 	result := convertFixture(t, LegacyOptions{BaseDir: base})
-	runner, err := kscript.New(result.Definition)
+	runner, err := taskrun.New(result.Definition)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	plan, err := runner.Inspect(context.Background(), kscript.Request{Task: "structured", Args: []string{"value"}})
+	plan, err := runner.Inspect(context.Background(), taskrun.Request{Task: "structured", Args: []string{"value"}})
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}

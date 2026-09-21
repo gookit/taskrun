@@ -1,19 +1,24 @@
 # Kite 迁移说明
 
+> 2026-09-21：独立库已由 `github.com/gookit/kscript` 改名为
+> `github.com/gookit/taskrun`（主包 `taskrun`）。kite-go 侧旧包仍叫 `pkg/kscript`，
+> 两个名字不再冲突，桥接包可以直接以 `taskrun` 导入而不需要别名。
+> 引擎开关值由 `script_engine: kscript` 改为 `script_engine: taskrun`。
+
 独立库只负责任务定义、加载、条件、执行和结果。Kite 的 alias、extension、plugin、
 系统命令兜底以及 `gvs`、`paths`、`kite` 应用变量仍由 Kite 适配层负责。
 
 迁移步骤：
 
 1. Kite 读取旧配置文件并保留原发现顺序（`DefineFiles` + `AutoTaskFiles`/`AutoMaxDepth`）。
-2. 将旧 `Scripts` map 交给 `formats.LegacyDefinition` 转成 `kscript.Definition`；
+2. 将旧 `Scripts` map 交给 `formats.LegacyDefinition` 转成 `taskrun.Definition`；
    `ScriptDirs` 扫描结果通过 `LegacyOptions.Files` 传入，`type_shell` 通过
    `LegacyOptions.DefaultShell` 传入。
 3. `AppendVarsFn` 产出的 `gvs`、`paths`、`kite` 等运行期变量放入 `Request.Vars`，
    与 `ctx.Vars` 合并；同时把这些名字列在 `LegacyOptions.RuntimeVars` 中，转换器才会把
    旧 `$name`/`${name}` 重写成 `${vars.name}`。
 4. 继续由 `RunAny` 先处理 alias 和 extension，再调用独立 Runner。
-5. 只有根任务返回 `kscript.ErrNotFound` 时才允许继续系统命令兜底；`ErrInvalidDefinition`
+5. 只有根任务返回 `taskrun.ErrNotFound` 时才允许继续系统命令兜底；`ErrInvalidDefinition`
    和加载错误必须直接返回。
 6. 迁移期间保留旧 Runner 回退点（配置开关或独立提交），完成 fixture 对照后再删除旧实现。
 
@@ -64,16 +69,16 @@
 - Kite 侧 `pkg/kscript/bridge` 适配包：把旧 Runner 已加载的脚本 map、`__settings`、
   `ScriptDirs`/`AllowedExt`/`ExtToBinMap`、运行期变量（`ctx.Vars`、`$@`/`$*`/`$1..N`、
   `time`/`workdir`/`dirname`/`cur_dir`、`AppendVarsFn` 的 `gvs`/`paths`/`kite`）转成
-  `kscript.Definition` 与 `Request`，并提供 `TryRun`/`Run`（未匹配返回 found=false，
+  `taskrun.Definition` 与 `Request`，并提供 `TryRun`/`Run`（未匹配返回 found=false，
   便于继续系统命令兜底）。
-- Kite 侧引擎开关：配置 `script_engine: legacy|kscript`，默认 `legacy`。
+- Kite 侧引擎开关：配置 `script_engine: legacy|taskrun`，默认 `legacy`。
   `cmdbiz.RunScriptName`/`RunScriptOnly` 按开关分发；`RunAny` 与
   `kite run --type=script` 已接入。旧 Runner 保留为回退点，转换失败时桥接自动回退到
   旧实现（`WithLegacyFallback(true)`）并记录 warning。
 - Kite 侧新增只读访问器 `SettingsData`、`ScriptFileMap`、`ExtToBin`，旧包其余行为不变。
 
-依赖方式：当前 `kite-go/go.mod` 使用临时 `replace github.com/gookit/kscript =>
-../../gookit2/kscript`（设计允许的本地迁移验证方式）。发布正式版本后应改为真实版本号；
+依赖方式：当前 `kite-go/go.mod` 使用临时 `replace github.com/gookit/taskrun =>
+../../gookit2/kscript`（设计允许的本地迁移验证方式；目录名保持原样，模块路径已是 taskrun）。发布正式版本后应改为真实版本号；
 该 replace 是本迁移的临时状态，不影响新库。
 
 验证（2026-09-19）：
@@ -106,7 +111,7 @@ Shell 展开的 env）分别在旧 Runner 与桥接引擎上运行，并把每�
 
 ## 尚未完成
 
-- `script_engine: kscript` 尚未在真实配置上**实际执行**过任务（转换、校验、规划已验证；
+- `script_engine: taskrun` 尚未在真实配置上**实际执行**过任务（转换、校验、规划已验证；
   执行会产生副作用，需由使用者自行触发）。
 - 项目级自动发现文件（`AutoTaskFiles`）与 `~/.kite` 用户目录配置：本机不存在该目录，
   发现逻辑本身仍由旧 Runner 负责，因此不在本次转换范围内。
@@ -124,7 +129,7 @@ Shell 展开的 env）分别在旧 Runner 与桥接引擎上运行，并把每�
 
 回退点移除时（即旧 Runner 删除、`script_engine` 开关取消）需要一并把列表/搜索迁到新库，
 所需数据为：任务名与 `Desc`、脚本文件注册表，以及全局/项目两套来源集合。
-- 旧 fixture 的运行结果逐项对照已完成（`bridge/compat_test.go` 双引擎 trace 逐字节比较）；仍未做的是在真实 Kite 配置上以 `script_engine: kscript` 端到端运行。
+- 旧 fixture 的运行结果逐项对照已完成（`bridge/compat_test.go` 双引擎 trace 逐字节比较）；仍未做的是在真实 Kite 配置上以 `script_engine: taskrun` 端到端运行。
 
 ## 行为差异（有意修复）
 

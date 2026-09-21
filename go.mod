@@ -1,4 +1,4 @@
-module github.com/gookit/kscript
+module github.com/gookit/taskrun
 
 go 1.23
 

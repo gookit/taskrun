@@ -1,4 +1,4 @@
-// Command kscript runs one task from a definition file. It is a small consumer
+// Command taskrun runs one task from a definition file. It is a small consumer
 // example for the library, not part of the library API.
 package main
 
@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gookit/kscript"
-	"github.com/gookit/kscript/formats"
+	"github.com/gookit/taskrun"
+	"github.com/gookit/taskrun/formats"
 )
 
 func main() {
@@ -17,7 +17,7 @@ func main() {
 	taskName := flag.String("task", "", "task name")
 	dryRun := flag.Bool("dry-run", false, "validate and print the plan without running commands")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: kscript -config <file> -task <name> [-dry-run] [args...]")
+		fmt.Fprintln(os.Stderr, "usage: taskrun -config <file> -task <name> [-dry-run] [args...]")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -31,16 +31,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	runner, err := kscript.New(def)
+	runner, err := taskrun.New(def)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	request := kscript.Request{
+	request := taskrun.Request{
 		Task:   *taskName,
 		Args:   flag.Args(),
 		DryRun: *dryRun,
-		IO:     kscript.IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr},
+		IO:     taskrun.IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr},
 	}
 	if *dryRun {
 		plan, err := runner.Inspect(context.Background(), request)

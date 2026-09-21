@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gookit/kscript"
+	"github.com/gookit/taskrun"
 )
 
 // decodeError locates a decoding problem in its source file and field path.
@@ -159,74 +159,74 @@ func (d *decoder) getTimeout(value map[string]any, path, key string) (time.Durat
 	return duration, true, nil
 }
 
-func decodeDefinition(raw map[string]any, source, baseDir, format string) (kscript.Definition, error) {
+func decodeDefinition(raw map[string]any, source, baseDir, format string) (taskrun.Definition, error) {
 	d := &decoder{source: source, baseDir: baseDir}
-	def := kscript.Definition{
+	def := taskrun.Definition{
 		Version: 1,
 		BaseDir: baseDir,
 		Vars:    map[string]any{},
 		Env:     map[string]string{},
-		Tasks:   map[string]kscript.Task{},
-		Files:   map[string]kscript.ScriptFile{},
-		Sources: []kscript.Source{{Name: source, BaseDir: baseDir, Format: format}},
+		Tasks:   map[string]taskrun.Task{},
+		Files:   map[string]taskrun.ScriptFile{},
+		Sources: []taskrun.Source{{Name: source, BaseDir: baseDir, Format: format}},
 	}
 	if err := d.checkKeys(raw, "", "version", "vars", "env", "env_paths", "tasks", "files"); err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if versionRaw, ok := raw["version"]; ok && versionRaw != nil {
 		version, err := asInt(versionRaw)
 		if err != nil {
-			return kscript.Definition{}, d.fail("", "version must be an integer: %v", err)
+			return taskrun.Definition{}, d.fail("", "version must be an integer: %v", err)
 		}
 		if version != 1 {
-			return kscript.Definition{}, d.fail("", "unsupported schema version %d; this library implements version 1", version)
+			return taskrun.Definition{}, d.fail("", "unsupported schema version %d; this library implements version 1", version)
 		}
 		def.Version = version
 	}
 	vars, ok, err := d.getDataMap(raw, "", "vars")
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if ok {
 		def.Vars = vars
 	}
 	env, ok, err := d.getStringMap(raw, "", "env")
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if ok {
 		def.Env = env
 	}
 	envPaths, ok, err := d.getStringList(raw, "", "env_paths")
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if ok {
 		def.EnvPaths = envPaths
 	}
 	tasksRaw, ok, err := d.getMap(raw, "", "tasks")
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if !ok {
-		return kscript.Definition{}, d.fail("", "tasks is required")
+		return taskrun.Definition{}, d.fail("", "tasks is required")
 	}
 	for _, name := range sortedKeys(tasksRaw) {
 		task, err := d.decodeTask(name, tasksRaw[name])
 		if err != nil {
-			return kscript.Definition{}, err
+			return taskrun.Definition{}, err
 		}
 		def.Tasks[name] = task
 	}
 	filesRaw, ok, err := d.getMap(raw, "", "files")
 	if err != nil {
-		return kscript.Definition{}, err
+		return taskrun.Definition{}, err
 	}
 	if ok {
 		for _, name := range sortedKeys(filesRaw) {
 			file, err := d.decodeFile(name, filesRaw[name])
 			if err != nil {
-				return kscript.Definition{}, err
+				return taskrun.Definition{}, err
 			}
 			def.Files[name] = file
 		}
@@ -234,83 +234,83 @@ func decodeDefinition(raw map[string]any, source, baseDir, format string) (kscri
 	return def, nil
 }
 
-func (d *decoder) decodeTask(name string, raw any) (kscript.Task, error) {
+func (d *decoder) decodeTask(name string, raw any) (taskrun.Task, error) {
 	path := "tasks." + name
 	value, ok := raw.(map[string]any)
 	if !ok {
-		return kscript.Task{}, d.fail(path, "task must be an object, got %T", raw)
+		return taskrun.Task{}, d.fail(path, "task must be an object, got %T", raw)
 	}
 	if name == "" {
-		return kscript.Task{}, d.fail(path, "task name must not be empty")
+		return taskrun.Task{}, d.fail(path, "task name must not be empty")
 	}
-	task := kscript.Task{Name: name}
+	task := taskrun.Task{Name: name}
 	if err := d.checkKeys(value, path, "desc", "if", "platform", "deps", "dir",
 		"timeout", "clean_env", "env", "env_paths", "vars", "dynamic_vars", "steps"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	}
 	if desc, ok, err := d.getString(value, path, "desc"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.Desc = desc
 	}
 	if condition, ok, err := d.getString(value, path, "if"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.If = condition
 	}
 	if platforms, ok, err := d.getStringList(value, path, "platform"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.Platform = platforms
 	}
 	if deps, ok, err := d.getStringList(value, path, "deps"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.Deps = deps
 	}
 	if dir, ok, err := d.getString(value, path, "dir"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.Dir = dir
 	}
 	if timeout, ok, err := d.getTimeout(value, path, "timeout"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.Timeout = timeout
 	}
 	if clean, ok, err := d.getBool(value, path, "clean_env"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.CleanEnv = clean
 	}
 	if env, ok, err := d.getStringMap(value, path, "env"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.Env = env
 	}
 	if paths, ok, err := d.getStringList(value, path, "env_paths"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.EnvPaths = paths
 	}
 	if vars, ok, err := d.getDataMap(value, path, "vars"); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.Vars = vars
 	}
 	if dyn, ok, err := d.decodeDynamicVars(value, path); err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	} else if ok {
 		task.DynamicVars = dyn
 	}
 	stepsRaw, ok, err := d.getList(value, path, "steps")
 	if err != nil {
-		return kscript.Task{}, err
+		return taskrun.Task{}, err
 	}
 	for i, stepRaw := range stepsRaw {
 		step, err := d.decodeStep(fmt.Sprintf("%s.steps[%d]", path, i), stepRaw)
 		if err != nil {
-			return kscript.Task{}, err
+			return taskrun.Task{}, err
 		}
 		if step.Name == "" {
 			step.Name = fmt.Sprintf("#%d", i+1)
@@ -321,109 +321,109 @@ func (d *decoder) decodeTask(name string, raw any) (kscript.Task, error) {
 	return task, nil
 }
 
-func (d *decoder) decodeStep(path string, raw any) (kscript.Step, error) {
+func (d *decoder) decodeStep(path string, raw any) (taskrun.Step, error) {
 	value, ok := raw.(map[string]any)
 	if !ok {
-		return kscript.Step{}, d.fail(path, "step must be an object, got %T", raw)
+		return taskrun.Step{}, d.fail(path, "step must be an object, got %T", raw)
 	}
 	if err := d.checkKeys(value, path, "name", "if", "platform", "dir", "timeout", "ignore_error",
 		"env", "env_paths", "vars", "dynamic_vars",
 		"exec", "shell", "file", "task", "host"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	}
-	step := kscript.Step{}
+	step := taskrun.Step{}
 	if name, ok, err := d.getString(value, path, "name"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.Name = name
 	}
 	if condition, ok, err := d.getString(value, path, "if"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.If = condition
 	}
 	if platforms, ok, err := d.getStringList(value, path, "platform"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.Platform = platforms
 	}
 	if dir, ok, err := d.getString(value, path, "dir"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.Dir = dir
 	}
 	if timeout, ok, err := d.getTimeout(value, path, "timeout"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.Timeout = timeout
 	}
 	if ignore, ok, err := d.getBool(value, path, "ignore_error"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.IgnoreError = ignore
 	}
 	if env, ok, err := d.getStringMap(value, path, "env"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.Env = env
 	}
 	if paths, ok, err := d.getStringList(value, path, "env_paths"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.EnvPaths = paths
 	}
 	if vars, ok, err := d.getDataMap(value, path, "vars"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.Vars = vars
 	}
 	if dyn, ok, err := d.decodeDynamicVars(value, path); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		step.DynamicVars = dyn
 	}
 	if spec, ok, err := d.getMap(value, path, "exec"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		exec, err := d.decodeExec(path+".exec", spec)
 		if err != nil {
-			return kscript.Step{}, err
+			return taskrun.Step{}, err
 		}
 		step.Exec = exec
 	}
 	if spec, ok, err := d.getMap(value, path, "shell"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		shell, err := d.decodeShell(path+".shell", spec)
 		if err != nil {
-			return kscript.Step{}, err
+			return taskrun.Step{}, err
 		}
 		step.Shell = shell
 	}
 	if spec, ok, err := d.getMap(value, path, "file"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		file, err := d.decodeFileRef(path+".file", spec)
 		if err != nil {
-			return kscript.Step{}, err
+			return taskrun.Step{}, err
 		}
 		step.File = file
 	}
 	if spec, ok, err := d.getMap(value, path, "task"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		call, err := d.decodeTaskCall(path+".task", spec)
 		if err != nil {
-			return kscript.Step{}, err
+			return taskrun.Step{}, err
 		}
 		step.Task = call
 	}
 	if spec, ok, err := d.getMap(value, path, "host"); err != nil {
-		return kscript.Step{}, err
+		return taskrun.Step{}, err
 	} else if ok {
 		host, err := d.decodeHost(path+".host", spec)
 		if err != nil {
-			return kscript.Step{}, err
+			return taskrun.Step{}, err
 		}
 		step.Host = host
 	}
@@ -437,15 +437,15 @@ func (d *decoder) decodeStep(path string, raw any) (kscript.Step, error) {
 	}
 	switch actions {
 	case 0:
-		return kscript.Step{}, d.fail(path, "step must declare exactly one of exec, shell, file, task or host")
+		return taskrun.Step{}, d.fail(path, "step must declare exactly one of exec, shell, file, task or host")
 	case 1:
 	default:
-		return kscript.Step{}, d.fail(path, "step declares more than one action; exactly one of exec, shell, file, task or host is allowed")
+		return taskrun.Step{}, d.fail(path, "step declares more than one action; exactly one of exec, shell, file, task or host is allowed")
 	}
 	return step, nil
 }
 
-func (d *decoder) decodeExec(path string, spec map[string]any) (*kscript.ExecSpec, error) {
+func (d *decoder) decodeExec(path string, spec map[string]any) (*taskrun.ExecSpec, error) {
 	if err := d.checkKeys(spec, path, "program", "args"); err != nil {
 		return nil, err
 	}
@@ -460,10 +460,10 @@ func (d *decoder) decodeExec(path string, spec map[string]any) (*kscript.ExecSpe
 	if err != nil {
 		return nil, err
 	}
-	return &kscript.ExecSpec{Program: program, Args: args}, nil
+	return &taskrun.ExecSpec{Program: program, Args: args}, nil
 }
 
-func (d *decoder) decodeShell(path string, spec map[string]any) (*kscript.ShellSpec, error) {
+func (d *decoder) decodeShell(path string, spec map[string]any) (*taskrun.ShellSpec, error) {
 	if err := d.checkKeys(spec, path, "name", "script", "prefix_args"); err != nil {
 		return nil, err
 	}
@@ -485,10 +485,10 @@ func (d *decoder) decodeShell(path string, spec map[string]any) (*kscript.ShellS
 	if err != nil {
 		return nil, err
 	}
-	return &kscript.ShellSpec{Name: name, Script: script, PrefixArgs: prefix}, nil
+	return &taskrun.ShellSpec{Name: name, Script: script, PrefixArgs: prefix}, nil
 }
 
-func (d *decoder) decodeFileRef(path string, spec map[string]any) (*kscript.FileSpec, error) {
+func (d *decoder) decodeFileRef(path string, spec map[string]any) (*taskrun.FileSpec, error) {
 	if err := d.checkKeys(spec, path, "name", "args"); err != nil {
 		return nil, err
 	}
@@ -503,10 +503,10 @@ func (d *decoder) decodeFileRef(path string, spec map[string]any) (*kscript.File
 	if err != nil {
 		return nil, err
 	}
-	return &kscript.FileSpec{Name: name, Args: args}, nil
+	return &taskrun.FileSpec{Name: name, Args: args}, nil
 }
 
-func (d *decoder) decodeTaskCall(path string, spec map[string]any) (*kscript.TaskCall, error) {
+func (d *decoder) decodeTaskCall(path string, spec map[string]any) (*taskrun.TaskCall, error) {
 	if err := d.checkKeys(spec, path, "name", "args", "forward_args"); err != nil {
 		return nil, err
 	}
@@ -517,7 +517,7 @@ func (d *decoder) decodeTaskCall(path string, spec map[string]any) (*kscript.Tas
 	if !ok || name == "" {
 		return nil, d.fail(path, "name is required")
 	}
-	call := &kscript.TaskCall{Name: name}
+	call := &taskrun.TaskCall{Name: name}
 	// A present args key replaces the inherited arguments even when empty.
 	if raw, present := spec["args"]; present {
 		args, _, err := d.getStringList(spec, path, "args")
@@ -540,7 +540,7 @@ func (d *decoder) decodeTaskCall(path string, spec map[string]any) (*kscript.Tas
 	return call, nil
 }
 
-func (d *decoder) decodeHost(path string, spec map[string]any) (*kscript.HostSpec, error) {
+func (d *decoder) decodeHost(path string, spec map[string]any) (*taskrun.HostSpec, error) {
 	if err := d.checkKeys(spec, path, "name", "args"); err != nil {
 		return nil, err
 	}
@@ -551,7 +551,7 @@ func (d *decoder) decodeHost(path string, spec map[string]any) (*kscript.HostSpe
 	if !ok || name == "" {
 		return nil, d.fail(path, "name is required")
 	}
-	host := &kscript.HostSpec{Name: name}
+	host := &taskrun.HostSpec{Name: name}
 	if args, ok, err := d.getList(spec, path, "args"); err != nil {
 		return nil, err
 	} else if ok {
@@ -560,12 +560,12 @@ func (d *decoder) decodeHost(path string, spec map[string]any) (*kscript.HostSpe
 	return host, nil
 }
 
-func (d *decoder) decodeDynamicVars(value map[string]any, path string) (map[string]kscript.DynamicVar, bool, error) {
+func (d *decoder) decodeDynamicVars(value map[string]any, path string) (map[string]taskrun.DynamicVar, bool, error) {
 	raw, ok, err := d.getMap(value, path, "dynamic_vars")
 	if err != nil || !ok {
 		return nil, ok, err
 	}
-	out := make(map[string]kscript.DynamicVar, len(raw))
+	out := make(map[string]taskrun.DynamicVar, len(raw))
 	for _, name := range sortedKeys(raw) {
 		itemPath := path + ".dynamic_vars." + name
 		spec, ok := raw[name].(map[string]any)
@@ -575,7 +575,7 @@ func (d *decoder) decodeDynamicVars(value map[string]any, path string) (map[stri
 		if err := d.checkKeys(spec, itemPath, "exec", "shell", "file"); err != nil {
 			return nil, false, err
 		}
-		item := kscript.DynamicVar{}
+		item := taskrun.DynamicVar{}
 		if exec, ok, err := d.getMap(spec, itemPath, "exec"); err != nil {
 			return nil, false, err
 		} else if ok {
@@ -611,22 +611,22 @@ func (d *decoder) decodeDynamicVars(value map[string]any, path string) (map[stri
 	return out, true, nil
 }
 
-func (d *decoder) decodeFile(name string, raw any) (kscript.ScriptFile, error) {
+func (d *decoder) decodeFile(name string, raw any) (taskrun.ScriptFile, error) {
 	path := "files." + name
 	value, ok := raw.(map[string]any)
 	if !ok {
-		return kscript.ScriptFile{}, d.fail(path, "script file must be an object, got %T", raw)
+		return taskrun.ScriptFile{}, d.fail(path, "script file must be an object, got %T", raw)
 	}
 	if err := d.checkKeys(value, path, "path", "args", "dir", "env", "interpreter"); err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	}
-	file := kscript.ScriptFile{Name: name}
+	file := taskrun.ScriptFile{Name: name}
 	filePath, ok, err := d.getString(value, path, "path")
 	if err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	}
 	if !ok || filePath == "" {
-		return kscript.ScriptFile{}, d.fail(path, "path is required")
+		return taskrun.ScriptFile{}, d.fail(path, "path is required")
 	}
 	file.Path = filePath
 	// A script path must stay inside the source base directory; escaping paths
@@ -638,51 +638,51 @@ func (d *decoder) decodeFile(name string, raw any) (kscript.ScriptFile, error) {
 	}
 	resolved = filepath.Clean(resolved)
 	if !withinBase(d.baseDir, resolved) {
-		return kscript.ScriptFile{}, d.fail(path, "path %q escapes the source base directory %s", filePath, d.baseDir)
+		return taskrun.ScriptFile{}, d.fail(path, "path %q escapes the source base directory %s", filePath, d.baseDir)
 	}
 	file.Path = resolved
 	if args, ok, err := d.getStringList(value, path, "args"); err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	} else if ok {
 		file.Args = args
 	}
 	if dir, ok, err := d.getString(value, path, "dir"); err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	} else if ok {
 		file.Dir = dir
 	}
 	if env, ok, err := d.getStringMap(value, path, "env"); err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	} else if ok {
 		file.Env = env
 	}
 	interpreter, ok, err := d.getMap(value, path, "interpreter")
 	if err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	}
 	if !ok {
-		return kscript.ScriptFile{}, d.fail(path, "interpreter is required")
+		return taskrun.ScriptFile{}, d.fail(path, "interpreter is required")
 	}
 	if err := d.checkKeys(interpreter, path+".interpreter", "program", "prefix_args"); err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	}
 	program, ok, err := d.getString(interpreter, path+".interpreter", "program")
 	if err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	}
 	if !ok || program == "" {
-		return kscript.ScriptFile{}, d.fail(path+".interpreter", "program is required, for example go with prefix_args [run]")
+		return taskrun.ScriptFile{}, d.fail(path+".interpreter", "program is required, for example go with prefix_args [run]")
 	}
 	prefix, _, err := d.getStringList(interpreter, path+".interpreter", "prefix_args")
 	if err != nil {
-		return kscript.ScriptFile{}, err
+		return taskrun.ScriptFile{}, err
 	}
-	file.Interpreter = kscript.Interpreter{Program: program, PrefixArgs: prefix}
+	file.Interpreter = taskrun.Interpreter{Program: program, PrefixArgs: prefix}
 	return file, nil
 }
 
 // dynamicKindCount counts how many actions a dynamic variable declares.
-func dynamicKindCount(item kscript.DynamicVar) int {
+func dynamicKindCount(item taskrun.DynamicVar) int {
 	count := 0
 	for _, set := range []bool{item.Exec != nil, item.Shell != nil, item.File != nil} {
 		if set {

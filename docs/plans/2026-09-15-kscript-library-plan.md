@@ -1,12 +1,14 @@
 <!-- template_id: plan; template_version: 1.2.0 -->
-# github.com/gookit/kscript 独立库实施计划
+# github.com/gookit/taskrun 独立库实施计划
 
-> 状态：Draft 0.2 / 待人工计划批准
+> 状态：Draft 0.3 / 待人工计划批准
 >
-> 目标 module：`github.com/gookit/kscript`；Git root：`D:/work/inhere/my-tools-dev/gookit2/kscript`。
-> 该目录当前尚未创建；本计划不把路径确认视为已授权初始化 Git 或创建远端仓库。
+> 目标 module：`github.com/gookit/taskrun`；本机工作副本：`D:/work/inhere/my-tools-dev/gookit2/kscript`。
+> 0.3 修订只改模块 identity（`github.com/gookit/taskrun`，主包 `taskrun`）；本机目录名仍为 `gookit2/kscript`，
+> 因为该目录被当前工作区某个进程的文件锁占用、无法改名（详见 `docs/progress`）。克隆新仓库时会自然得到 `taskrun`。
 >
-> 下文 `<target>` 均指上述 `D:/work/inhere/my-tools-dev/gookit2/kscript`。
+> 该目录已于 2026-09-15 后创建并已有提交历史；远端仓库仍需单独授权创建。
+> 下文 `<target>` 均指上述 `D:/work/inhere/my-tools-dev/gookit2/kscript`（模块路径为 taskrun）。
 
 ## 修订记录
 
@@ -14,12 +16,13 @@
 |---|---|---|---|
 | 0.1 | 2026-09-15 | Codex | 将 Draft 0.2 设计拆为基线、独立核心、格式/执行器、Kite 迁移、第二应用验证和发布准备波次 |
 | 0.2 | 2026-09-15 | Codex | 将新库 Git root 明确为 `gookit2/kscript`，同步目标路径、前置 Gate、任务和回滚边界 |
+| 0.3 | 2026-09-21 | Codex | 按用户决定将模块改名为 `github.com/gookit/taskrun`（主包 `taskrun`），本机目录名保持 `gookit2/kscript`；记录改名原因（`kscript` 的 k 前缀是 Kite 遗留、与旧包同名需要 import 别名）并同步文档与路径引用 |
 
 仅任务合同、范围、风险、验证、生命周期或执行语义变化时递增版本；路径、作者、状态等元数据纠正不增加版本。
 
 ## 目标与完成定义
 
-将现有 `kite-go/pkg/kscript` 抽离为 `github.com/gookit/kscript`，让外部 Go 1.23+ 应用能够在不初始化 Kite 的情况下加载定义、检查计划、运行任务和脚本文件，并取得隔离、可取消、可分类的结构化结果。Kite 继续通过适配层保留 alias、extension、plugin、系统命令兜底和旧配置语义。
+将现有 `kite-go/pkg/kscript` 抽离为 `github.com/gookit/taskrun`，让外部 Go 1.23+ 应用能够在不初始化 Kite 的情况下加载定义、检查计划、运行任务和脚本文件，并取得隔离、可取消、可分类的结构化结果。Kite 继续通过适配层保留 alias、extension、plugin、系统命令兜底和旧配置语义。
 
 完成定义：
 
@@ -55,7 +58,7 @@
 
 | capability_id | required_capability | searched_candidates | direct_reuse | thin_adapter_or_owner_extension | decision | proven_gap | duplication_and_lifecycle_risk |
 |---|---|---|---|---|---|---|---|
-| CAP-01 | 独立 Go module 与公共任务 API | 现有 `pkg/kscript`；go-task/task；just | 现有 kscript 模型可迁移，但 Kite module 不能作为公共依赖 | 从现有模型迁移到新主包，Kite 通过 converter | MINIMAL_NEW_MODULE | 需要独立 import path、无 Kite internal 依赖和稳定错误/API | 新 module owner 为 gookit/kscript；Kite converter 只由 kite-go 维护 |
+| CAP-01 | 独立 Go module 与公共任务 API | 现有 `pkg/kscript`；go-task/task；just | 现有 kscript 模型可迁移，但 Kite module 不能作为公共依赖 | 从现有模型迁移到新主包，Kite 通过 converter | MINIMAL_NEW_MODULE | 需要独立 import path、无 Kite internal 依赖和稳定错误/API | 新 module owner 为 gookit/taskrun；Kite converter 只由 kite-go 维护 |
 | CAP-02 | 顺序依赖、循环检查和运行隔离 | 现有 `deps`/`@task:` 递归；go-task/task DAG | 复用现有顺序行为和测试 fixture | `internal/graph` 做引用校验与 CallState | OWNER_EXTENSION | 现有递归没有完整循环/膨胀保护，RunCtx 可变共享 | 调度器只存在新库；Kite 不复制 DAG |
 | CAP-03 | exec/Shell/file/host 执行 | 现有 `cmdr`；stdlib os/exec；mvdan/sh | 首期复用标准进程能力；现有 cmdr 仅作为实现参考 | `Engine` 接口；Kite Handler adapter | THIN_ADAPTER | 需 argv/Shell 结构化参数、取消、进程清理、输出模型 | Engine owner 为新库；mvdan/sh 延期为可选实现 |
 | CAP-04 | 任务/Step 条件判断和表达式 | 现有 expr 依赖；expr 官方库 | 直接复用 expr 编译器依赖 | 封装只读 Env、bool 校验和 Deferred Inspect | DIRECT_REUSE | 现有 resolveIfExpr panic、打印且固定 true，未接入 Step | expr 由新库统一维护；不得再造表达式语言 |
@@ -66,7 +69,7 @@
 
 | candidate_id | capability_id | proposed_module | searched_candidates | direct_reuse_gap | thin_adapter_or_owner_extension_gap | proven_gap | unique_owner_and_lifecycle | deletion_or_merge_handling |
 |---|---|---|---|---|---|---|---|---|
-| MOD-01 | CAP-01 | `github.com/gookit/kscript` | 现有 kscript、go-task/task、just | Kite module 无法提供独立公共边界；task/just 定位或语言不符 | 新库需拥有 API、版本、测试和发布生命周期 | 设计与评审已证明独立 import/多应用目标 | gookit/kscript owner；v0.x → v1 SemVer | 若取消抽离，删除新 module，Kite 保留原包；不同时维护两个核心实现 |
+| MOD-01 | CAP-01 | `github.com/gookit/taskrun` | 现有 kscript、go-task/task、just | Kite module 无法提供独立公共边界；task/just 定位或语言不符 | 新库需拥有 API、版本、测试和发布生命周期 | 设计与评审已证明独立 import/多应用目标 | gookit/taskrun owner；v0.x → v1 SemVer | 若取消抽离，删除新 module，Kite 保留原包；不同时维护两个核心实现 |
 
 ### Rejected new tools
 
@@ -85,7 +88,7 @@
 2. 记录目标 Git root、branch、HEAD、`git status --short`；现有 Kite baseline 为 root `D:/work/inhere/my-tools-dev/inhere-tools/kite-go`、branch `main`、HEAD `bf307538cdbed3f9a0a1eafa40784a45256db7b3`。
 3. Kite 当前 dirty/untracked 为 `.codebase-memory/`、`docs/research/`；它们不是本计划所有权，必须保留，不得 add、删除或 reset。设计和评审文件为本计划的受控路径，已在 candidate commit 中固定。
 4. 重新运行工作区 `probe`/`validate` 和目标 release 的 loader；revision、profile、root role 或 dirty 状态变化时停下并重新确认。
-5. 目标路径与 package import path 不一致、发现已有 `github.com/gookit/kscript` 远端内容、或已有实现与设计不同，归 `Semantic Amendment`，先回设计评审。
+5. 目标路径与 package import path 不一致、发现已有 `github.com/gookit/taskrun` 远端内容、或已有实现与设计不同，归 `Semantic Amendment`，先回设计评审。
 6. 任何新 CLI、schema、runner、registry、adapter 或 module 超出 CAP-01—CAP-06，先按 implementation-discovery 记录；不得直接创建未登记能力。
 7. 不执行推送、tag、release、部署、外部消息、数据迁移或生产命令；遇到 host/non-offline action 必须返回外部动作 Gate。
 
@@ -114,15 +117,15 @@ W1—W3 可在目标 module 内顺序推进，但每个波次完成后先做 foc
 ### T01 目标仓库与基线确认
 
 - 文件: `D:/work/inhere/my-tools-dev/gookit2/kscript/.git`（目标 Git root，当前尚不存在）；现有 `inhere-tools/kite-go` 仅读 baseline 文件。
-- 动作: owner 确认 `gookit2/kscript` 目录、Git root、Go 1.23 CI 方案和第二应用；创建目标 module 前记录 branch/HEAD/status；不要触碰 Kite 的 `.codebase-memory/`、`docs/research/`。
+- 动作: owner 确认 `gookit2/kscript` 目录（模块 `github.com/gookit/taskrun`）、Git root、Go 1.23 CI 方案和第二应用；创建目标 module 前记录 branch/HEAD/status；不要触碰 Kite 的 `.codebase-memory/`、`docs/research/`。
 - 验证: `git -C <target> status --short`、`go env GOVERSION`、目标模块 `go list ./...`（创建后）；保存 baseline/progress 记录。
 - 完成标准: 目标 root 和 owner 有明确证据；无未分类 dirty 路径；D02—D10 没有新的核心歧义。
 - 依赖: 设计批准、计划批准；本任务之前不创建文件。
 
 ### T02 创建独立 module 和公共模型
 
-- 文件: `<target>/go.mod`、`<target>/kscript.go`、`<target>/definition.go`、`<target>/request.go`、`<target>/result.go`、`<target>/engine.go`、`<target>/errors.go`。
-- 动作: 设置 module `github.com/gookit/kscript`、`go 1.23`；实现 Definition/Task/Step/ExecSpec/ShellSpec/FileSpec/HostSpec、Request/IO、Result/RunError、Engine/Handler；复制输入并冻结 Runner Definition；不导入 Kite/internal、gcli、cliui、全局日志。
+- 文件: `<target>/go.mod`、`<target>/taskrun.go`、`<target>/definition.go`、`<target>/request.go`、`<target>/result.go`、`<target>/engine.go`、`<target>/errors.go`。
+- 动作: 设置 module `github.com/gookit/taskrun`、`go 1.23`；实现 Definition/Task/Step/ExecSpec/ShellSpec/FileSpec/HostSpec、Request/IO、Result/RunError、Engine/Handler；复制输入并冻结 Runner Definition；不导入 Kite/internal、gcli、cliui、全局日志。
 - 验证: `go test ./...`；外部临时 module `go 1.23` 使用 replace 只做本地编译；`go list -deps` 检查无 `github.com/inhere/kite-go`。
 - 完成标准: 公共类型有 GoDoc；无效空 Task、负 timeout、未知动作和可变输入返回稳定错误；基础 exec Definition 可构造。
 - 依赖: T01。
@@ -210,7 +213,7 @@ W1—W3 可在目标 module 内顺序推进，但每个波次完成后先做 foc
 ## 人工 Gate
 
 1. **设计批准 Gate**：批准 Draft 0.2、Go 1.23+、Task/Step 条件判断和 v0.1 范围；未批准不得进入 T01 之后的 mutation。
-2. **计划批准 Gate**：批准本计划的目标 module 路径 `gookit2/kscript`、T01—T11 任务和 `host_or_non_offline_action=NOT_APPLICABLE`。
+2. **计划批准 Gate**：批准本计划的目标 module 路径 `github.com/gookit/taskrun`（本机目录 `gookit2/kscript`）、T01—T11 任务和 `host_or_non_offline_action=NOT_APPLICABLE`。
 3. **目标仓库/consumer Gate**：在 T01 明确新 module Git root、owner、第二应用路径和 Go 1.23 runner；路径或 owner 不明即停。
 4. **实施 Gate**：计划批准后仍需用户单独发出当前执行请求；该请求到达前只可审查或修订文档。
 5. **外部动作 Gate**：若后续要创建远端仓库、推送、tag、release、部署或运行非离线动作，逐项列出目标并另行取得批准。

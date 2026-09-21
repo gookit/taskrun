@@ -1,4 +1,4 @@
-package kscript
+package taskrun
 
 import (
 	"errors"
@@ -12,7 +12,7 @@ func errf(format string, args ...any) error { return fmt.Errorf(format, args...)
 
 // errDeferred marks a value that only exists at run time. Inspect reports it as
 // deferred instead of executing anything.
-var errDeferred = errors.New("kscript: value requires execution")
+var errDeferred = errors.New("taskrun: value requires execution")
 
 // maxDataDepth bounds nesting while validating caller supplied data.
 const maxDataDepth = 32
