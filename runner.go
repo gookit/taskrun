@@ -591,6 +591,9 @@ func (s *runState) runStep(parent context.Context, call *callState, taskScope *v
 	defer cancel()
 	label := stepLabel(step, index)
 	actionKind := step.actionKind()
+	// The effective step directory is deterministic, so it is available even when
+	// building the scope fails.
+	stepDir := resolveDir(call.dir, step.Dir)
 	skipped := false
 	defer func() {
 		if skipped {
@@ -613,7 +616,7 @@ func (s *runState) runStep(parent context.Context, call *callState, taskScope *v
 		s.emit(Event{
 			Kind: EventStepFinished, Task: call.task.Name, CallID: call.id, Step: label,
 			ActionKind: actionKind, Depth: call.depth, Status: status, ExitCode: exitCode,
-			Err: stepErr, Time: time.Now(),
+			Dir: stepDir, Err: stepErr, Time: time.Now(),
 		})
 	}()
 	if !platformMatches(step.Platform, runtime.GOOS) {
@@ -622,7 +625,8 @@ func (s *runState) runStep(parent context.Context, call *callState, taskScope *v
 		s.note("task %s step %s skipped: platform %s", call.task.Name, label, runtime.GOOS)
 		skipped = true
 		s.emit(Event{Kind: EventStepSkipped, Task: call.task.Name, CallID: call.id, Step: label,
-			ActionKind: actionKind, Depth: call.depth, Status: StatusSkipped, Reason: reason, Time: time.Now()})
+			ActionKind: actionKind, Depth: call.depth, Status: StatusSkipped, Reason: reason,
+			Dir: stepDir, Time: time.Now()})
 		return nil
 	}
 	scope, err := s.newStepScope(ctx, call, taskScope, index, step)
@@ -647,11 +651,12 @@ func (s *runState) runStep(parent context.Context, call *callState, taskScope *v
 		s.note("task %s step %s skipped: condition false", call.task.Name, scope.step)
 		skipped = true
 		s.emit(Event{Kind: EventStepSkipped, Task: call.task.Name, CallID: call.id, Step: label,
-			ActionKind: actionKind, Depth: call.depth, Status: StatusSkipped, Reason: "condition false", Time: time.Now()})
+			ActionKind: actionKind, Depth: call.depth, Status: StatusSkipped, Reason: "condition false",
+			Dir: stepDir, Time: time.Now()})
 		return nil
 	}
 	s.emit(Event{Kind: EventStepStarted, Task: call.task.Name, CallID: call.id, Step: label,
-		ActionKind: actionKind, Depth: call.depth, Time: time.Now()})
+		ActionKind: actionKind, Depth: call.depth, Dir: stepDir, Time: time.Now()})
 	switch actionKind {
 	case "task":
 		return s.runTaskCall(ctx, call, scope, step)
