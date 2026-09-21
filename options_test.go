@@ -1,6 +1,7 @@
 package taskrun
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -100,4 +101,49 @@ func TestSourceReportsProvenance(t *testing.T) {
 	if len(plain.Source()) != 0 {
 		t.Fatalf("Source() = %+v, want none", plain.Source())
 	}
+}
+
+// TestVarLevelVisibility pins which variables each level may reference:
+// definition defaults are rendered before Request.Vars is merged, so they may
+// not reference a request variable, while task and step levels may.
+func TestVarLevelVisibility(t *testing.T) {
+	t.Run("definition level cannot see request vars", func(t *testing.T) {
+		runner := newTestRunner(t, Definition{
+			Vars:  map[string]any{"repo": "${vars.target}/repo"},
+			Tasks: map[string]Task{"t": {Steps: []Step{{Name: "s", Exec: echoExec()}}}},
+		})
+		_, err := runner.Run(context.Background(), Request{
+			Task: "t", Vars: map[string]any{"target": "/tmp/work"},
+		})
+		if err == nil || !errors.Is(err, ErrInvalidDefinition) {
+			t.Fatalf("err=%v, want invalid_definition", err)
+		}
+		if !strings.Contains(err.Error(), "unknown variable") || !strings.Contains(err.Error(), "target") {
+			t.Fatalf("unhelpful error: %v", err)
+		}
+	})
+
+	t.Run("task and step levels can see request vars", func(t *testing.T) {
+		var seen map[string]any
+		runner := newTestRunner(t, Definition{
+			Vars: map[string]any{"skill": "hello"},
+			Tasks: map[string]Task{"t": {
+				Vars: map[string]any{"repo": "${vars.target}/repo"},
+				Steps: []Step{{
+					Vars: map[string]any{"script": "${vars.repo}/skills/${vars.skill}/install.go"},
+					Host: &HostSpec{Name: "capture"},
+				}},
+			}},
+		}, WithHandler("capture", func(_ context.Context, call HostCall) (ActionResult, error) {
+			seen = call.Vars
+			return ActionResult{}, nil
+		}))
+		mustRun(t, runner, Request{Task: "t", Vars: map[string]any{"target": "/tmp/work"}})
+		if seen["repo"] != "/tmp/work/repo" {
+			t.Fatalf("task level repo = %v", seen["repo"])
+		}
+		if seen["script"] != "/tmp/work/repo/skills/hello/install.go" {
+			t.Fatalf("step level script = %v", seen["script"])
+		}
+	})
 }

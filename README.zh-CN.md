@@ -142,6 +142,20 @@ YAML、JSON、TOML 解码为同一模型。未知字段、重复 key、类型错
 Task 的 `clean_env: true` 只去掉基线环境快照，显式 `env` 仍然保留。库不会调用
 `os.Chdir`、`os.Setenv`，运行期不重新读取进程环境，也不把结果写入磁盘。
 
+各层是自下而上解析的：Definition 默认值在 `Request.Vars` 合并前就渲染，因此它不能引用请求
+变量（在 Definition 的 `vars` 里写 `${vars.target}/repo` 会报
+`taskrun: invalid_definition: unknown variable "target"`）。组合运行期路径请放在 Task 或 Step 层，
+那里能看得到请求变量：
+
+```yaml
+vars:
+  skill: hello            # Definition 默认值：只写字面量
+tasks:
+  install:
+    vars:
+      repo_dir: "${vars.target}/repo"   # Task 层：能引用请求变量
+```
+
 模板为单次渲染并带命名空间：`${vars.name}`、`${env.NAME}`、`${args.N}`（从 1 开始）、
 `${host.name}`、`${run.task}`、`${run.dir}`、`${run.call}`、`${run.os}`、
 `${run.arch}`。未知引用报错，`$${` 表示字面量 `${`。`dynamic_vars` 声明的动态变量在

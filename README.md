@@ -148,6 +148,21 @@ Lowest to highest precedence:
 `env` values remain. The library never calls `os.Chdir`, `os.Setenv`, never
 re-reads the process environment during a run and never writes results to disk.
 
+Levels resolve from the bottom up, so a definition level default is rendered
+before `Request.Vars` is merged and therefore cannot reference a request
+variable: `${vars.target}/repo` in the definition `vars` fails with
+`taskrun: invalid_definition: unknown variable "target"`. Compose runtime paths at the
+task or step level instead, where request variables are visible:
+
+```yaml
+vars:
+  skill: hello            # definition defaults: literal values only
+tasks:
+  install:
+    vars:
+      repo_dir: "${vars.target}/repo"   # task level: request vars are visible
+```
+
 Templates are single-pass and namespaced: `${vars.name}`, `${env.NAME}`,
 `${args.N}` (1-based), `${host.name}`, `${run.task}`, `${run.dir}`,
 `${run.call}`, `${run.os}`, `${run.arch}`. Unknown references are errors and

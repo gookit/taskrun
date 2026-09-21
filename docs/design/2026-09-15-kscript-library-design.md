@@ -368,7 +368,7 @@ func main() {
 
 | 内容 | 从低到高的优先级或规则 |
 |---|---|
-| Vars | Definition 默认值 → 当前 Task → 当前 Step → Request.Vars；动态变量与静态变量同层，重复键报错 |
+| Vars | Definition 默认值 → 当前 Task → 当前 Step → Request.Vars；动态变量与静态变量同层，重复键报错。各层自下而上解析：Definition 默认值在合并 Request.Vars 之前渲染，因此不能引用请求变量（引用报 `invalid_definition: unknown variable`）；Task/Step 层可引用 Definition 与 Request 变量 |
 | HostData | 只读 `${host.*}`，不会被任务配置覆盖；Kite 将 gvs/paths/kite 放在此域 |
 | Env | Runner BaseEnv → Definition 默认值 → Task.Env → Step.Env → Request.Env；最后解析 EnvPaths |
 | CleanEnv | 当前 Task 的 CleanEnv 为 true 时只去掉 BaseEnv，显式 Env 仍保留；不更改宿主进程环境 |
